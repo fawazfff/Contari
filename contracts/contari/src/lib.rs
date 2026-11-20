@@ -5,7 +5,7 @@ mod contari {
     use super::*;
 
     pub struct ContariRegistry {
-        owner: ComponentAddress,
+        owner: RistrettoPublicKeyBytes,
         claim_count: u64,
         locker_count: u64,
     }
@@ -13,7 +13,7 @@ mod contari {
     impl ContariRegistry {
         pub fn new() -> Component<Self> {
             Component::new(Self {
-                owner: CallerContext::caller(),
+                owner: CallerContext::transaction_signer_public_key(),
                 claim_count: 0,
                 locker_count: 0,
             })
@@ -27,20 +27,23 @@ mod contari {
             .create()
         }
 
-        // Records that a locker was created. The app must not put private content here.
+        // Records a hash/reference only. Private content must never be written on-chain.
         pub fn register_locker(&mut self, locker_id_hash: String) {
             assert!(!locker_id_hash.is_empty(), "locker id hash is required");
             self.locker_count += 1;
-            emit_event("LockerRegistered", locker_id_hash);
+            emit_event("LockerRegistered", [("locker_id_hash", locker_id_hash)]);
         }
 
-        // Records a wallet claim reference. A production version must verify ownership
-        // proofs and enforce access policy before accepting this call.
+        // Prototype event only. A production method must verify a fresh ownership proof
+        // and enforce the selected access policy before accepting a claim.
         pub fn record_claim(&mut self, locker_id_hash: String, wallet_address: String) {
             assert!(!locker_id_hash.is_empty(), "locker id hash is required");
             assert!(!wallet_address.is_empty(), "wallet address is required");
             self.claim_count += 1;
-            emit_event("LockerClaimed", (locker_id_hash, wallet_address));
+            emit_event("LockerClaimed", [
+                ("locker_id_hash", locker_id_hash),
+                ("wallet_address", wallet_address),
+            ]);
         }
 
         pub fn get_counts(&self) -> (u64, u64) {

@@ -21,4 +21,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - run: cargo check --manifest-path contracts/contari/Cargo.toml --target wasm32-unknown-unknown
+      - run: cargo build --manifest-path contracts/contari/Cargo.toml --target wasm32-unknown-unknown --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contari-ootle-esmeralda-wasm
+          path: contracts/contari/target/wasm32-unknown-unknown/release/contari.wasm
+          if-no-files-found: error

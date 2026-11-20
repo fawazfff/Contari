@@ -95,11 +95,11 @@ export async function loadMyLockers(): Promise<Locker[]> {
   const session = await ensureContariSession();
   const { data, error } = await supabase
     .from("contari_lockers")
-    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,created_at")
+    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,created_at,contari_claims(claimant_wallet,created_at,proof)")
     .eq("owner_id", session.user.id)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  const lockers = (data || []).map((row: LockerRow) => toLocker(row));
+  const lockers = (data || []).map((row: LockerRow & { contari_claims?: Array<{ claimant_wallet: string; created_at: string; proof: unknown }> }) => toLocker(row, (row.contari_claims || []).map(claim => ({ address: claim.claimant_wallet, at: claim.created_at, proof: JSON.stringify(claim.proof || {}) }))));
   writeLocal(lockers);
   return lockers;
 }

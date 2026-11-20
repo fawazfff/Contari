@@ -20,8 +20,8 @@ mod contari {
     }
 
     impl ContariRegistry {
-        pub fn new() -> Self {
-            Self {
+        pub fn new() -> Component<Self> {
+            Component::new(Self {
                 locker_id_hashes: Vec::new(),
                 creators: Vec::new(),
                 networks: Vec::new(),
@@ -30,7 +30,15 @@ mod contari {
                 claimed_wallets: Vec::new(),
                 locker_count: 0,
                 claim_count: 0,
-            }
+            })
+            .with_access_rules(
+                ComponentAccessRules::new()
+                    .method("register_locker", rule!(allow_all))
+                    .method("claim_locker", rule!(allow_all))
+                    .method("get_counts", rule!(allow_all))
+                    .default(rule!(deny_all)),
+            )
+            .create()
         }
 
         /// Registers a locker hash. The authenticated transaction signer owns it.

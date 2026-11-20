@@ -73,7 +73,7 @@ function AuthPanel({ compact = false }: { compact?: boolean }) {
   if (userEmail) return <div className={compact ? "auth-panel auth-compact" : "auth-panel"}><span className="auth-status"><CheckCircle2 size={13}/> Signed in as {userEmail}</span><button type="button" onClick={signOut}>Sign out</button></div>;
   return <div className={compact ? "auth-panel auth-compact" : "auth-panel"}>
     <form onSubmit={send}><label htmlFor={compact ? "public-auth-email" : "workspace-auth-email"}>Email for cloud locker access</label><div className="auth-form-row"><input id={compact ? "public-auth-email" : "workspace-auth-email"} type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/><button type="submit" disabled={busy}>{busy ? "Sending..." : "Sign in"}</button></div></form>
-    {sent && <small className="auth-success">Check your inbox and open the sign-in link. Return here after confirming.</small>}
+    {sent && <small className="auth-success">Check your inbox and open the sign-in link. Then return to Contari.</small>}
     {error && <small className="auth-error">{error}</small>}
   </div>;
 }
@@ -99,7 +99,7 @@ function useWallet() {
 function Dashboard({ wallet }: { wallet: WalletSession | null }) {
   const [lockers, setLockers] = useState(readLockers());
   const [loadError, setLoadError] = useState("");
-  useEffect(() => { const load = () => loadMyLockers().then(setLockers).catch(error => setLoadError(error instanceof Error ? error.message : "Could not load cloud lockers.")); load(); const { data: { subscription } } = supabase.auth.onAuthStateChange(() => load()); return () => subscription.unsubscribe(); }, []);
+  useEffect(() => { const load = () => loadMyLockers().then(rows => { setLoadError(""); setLockers(rows); }).catch(error => setLoadError(error instanceof Error ? error.message : "Could not load cloud lockers.")); load(); const { data: { subscription } } = supabase.auth.onAuthStateChange(() => window.setTimeout(load, 0)); return () => subscription.unsubscribe(); }, []);
   const claims = lockers.reduce((sum, item) => sum + item.claims.length, 0);
   return <div className="page-content"><div className="page-title-row"><div><div className="eyebrow">YOUR SPACE</div><h1>Good to see you.</h1><p>Keep your private drops in one place.</p></div><Button to="/app/create"><FilePlus2 size={16}/> Create locker</Button></div><div className="stat-grid"><div className="stat-card"><span>YOUR LOCKERS</span><b>{lockers.length.toString().padStart(2,"0")}</b><small>Synced from your Contari workspace</small></div><div className="stat-card"><span>UNLOCK CLAIMS</span><b>{claims.toString().padStart(2,"0")}</b><small>Saved claim attempts</small></div><div className="stat-card"><span>WALLET STATUS</span><b className="stat-status">{wallet ? "Connected" : "Not connected"}</b><small>{wallet ? shortAddress(wallet.address) : "Connect to verify access"}</small></div></div><div className="content-heading"><div><h2>Recent lockers</h2><p>Your latest private links</p></div><Link to="/app/library">View all <ArrowRight size={14}/></Link></div>{loadError && <p className="form-error">{loadError}</p>}{lockers.length ? <div className="locker-list">{lockers.slice(0,4).map(item => <LockerRow key={item.id} locker={item}/>)}</div> : <EmptyState/>}<div className="workspace-note"><Sparkles size={18}/><div><b>Start with a private note</b><p>Write something you want to share with intention. Contari encrypts the content in your browser before saving it.</p></div><Button to="/app/create" variant="secondary">Create a locker <ArrowRight size={14}/></Button></div></div>;
 }
@@ -179,7 +179,7 @@ function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onCon
 function Library() {
   const [items,setItems] = useState(readLockers());
   const [error,setError] = useState("");
-  useEffect(() => { const load = () => loadMyLockers().then(setItems).catch(e => setError(e instanceof Error ? e.message : "Could not load lockers.")); load(); const { data: { subscription } } = supabase.auth.onAuthStateChange(() => load()); return () => subscription.unsubscribe(); }, []);
+  useEffect(() => { const load = () => loadMyLockers().then(rows => { setError(""); setItems(rows); }).catch(e => setError(e instanceof Error ? e.message : "Could not load lockers.")); load(); const { data: { subscription } } = supabase.auth.onAuthStateChange(() => window.setTimeout(load, 0)); return () => subscription.unsubscribe(); }, []);
   async function remove(id:string) { if(confirm("Delete this locker from Contari?")) { try { await deleteRemoteLocker(id); setItems(readLockers()); } catch(e) { setError(e instanceof Error ? e.message : "Could not delete locker."); } } }
   return <div className="page-content"><div className="page-title-row"><div><div className="eyebrow">YOUR CONTENT</div><h1>My lockers</h1><p>Private links you have created in this browser.</p></div><Button to="/app/create"><FilePlus2 size={16}/> New locker</Button></div>{error && <p className="form-error">{error}</p>}{items.length?<div className="locker-list">{items.map(item=><div className="library-row" key={item.id}><LockerRow locker={item}/><button onClick={()=>remove(item.id)} aria-label="Delete locker"><X size={16}/></button></div>)}</div>:<EmptyState/>}</div>;
 }

@@ -9,19 +9,20 @@ Contari is a Tari Ootle content-locker prototype. It encrypts a note in the brow
 - Encrypted locker records stored in Supabase and retrievable from another device.
 - Email magic-link authentication for locker ownership and cloud library access.
 - Supabase Row Level Security for locker ownership, public ciphertext reads, and claim records.
-- Tari wallet connection through the official `window.tari` connector.
-- Fresh Tari wallet-ownership challenge requests through `tari_signWalletOwnershipChallenge`.
+- Tari wallet connection through the official `window.tari` dApp connector.
+- Ootle registry transaction helpers for registering locker hashes and submitting wallet-signed claims when a published component address is configured.
+- Demo mode can request a fresh Tari wallet-ownership challenge through `tari_signWalletOwnershipChallenge`.
 - Optional allowlist check in the browser demo.
 
 ## Important security boundaries
 
 This is not yet a production access-control system.
 
-- The complete share URL contains the AES decryption key in its fragment. Anyone who receives the complete link can extract the key and decrypt the content outside Contari. Treat the link as a bearer secret.
-- The app requests a Tari wallet ownership signature, but it does not yet independently verify the Schnorr signature against the public key decoded from the wallet address.
+- The complete share URL contains the AES decryption key in its fragment. Anyone who receives the complete link can extract the key and decrypt the content outside Contari, even when the Ootle claim flow is configured. A separate key-release service is still required to make the gate enforce confidentiality. Treat the link as a bearer secret.
+- In Ootle mode, the registry checks the authenticated transaction signer against the owner key decoded from the Tari address. In demo mode, the app only records the wallet challenge response and does not independently verify it.
 - The allowlist is checked in the browser and can be bypassed by someone who extracts the key.
 - Claim rows are records of client-reported attempts. They are not independently verified wallet identities.
-- The Rust Ootle template is not published and is not connected to the web app's transaction flow.
+- The Rust Ootle template is not published yet. The web app can call its `register_locker` and `claim_locker` methods after you publish the template, instantiate the registry component, and save that component address in Settings.
 - Do not use Contari for valuable, regulated, or highly confidential information.
 
 ## Supabase setup
@@ -51,7 +52,7 @@ Contari loads the official connector from `https://universe.tari.mw/tari-connect
 
 ## Ootle template
 
-The Rust template lives in `contracts/contari`.
+The Rust template lives in `contracts/contari`. See [`contracts/README.md`](contracts/README.md) for build and Esmeralda publishing instructions.
 
 ```bash
 rustup target add wasm32-unknown-unknown

@@ -1,9 +1,27 @@
 # Contari Supabase setup
 
-The Contari schema is created in the connected Supabase project with `contari_lockers` and `contari_claims`. Encrypted content only is stored in the database. The AES-GCM decryption key is kept in the URL fragment and is not sent to Supabase.
+The connected Supabase project has the Contari schema:
 
-For local development, copy `.env.example` to `.env.local` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
+- `public.contari_lockers` stores encrypted locker payloads and ownership.
+- `public.contari_claims` stores client-reported wallet claim attempts.
 
-In the Supabase dashboard, open **Authentication → Sign In / Providers** and enable **Anonymous Sign-Ins**. Contari uses anonymous Supabase Auth sessions to assign locker ownership without asking creators for email or password. Public locker reads use the `anon` role; locker creation and owner management require an authenticated anonymous session.
+The matching SQL is tracked in `migrations/20261120210000_create_contari_tables.sql`. It has already been applied to the connected project. Do not rerun it as a new migration without checking migration history first.
 
-The browser wallet connector and server-side Tari signature verification are separate from Supabase. A recorded client-side wallet response is not equivalent to cryptographic signature verification or an on-chain access-control decision.
+## Authentication
+
+Contari uses passwordless email magic links, not anonymous sign-ins. This gives creators a persistent account to own lockers across devices.
+
+In Supabase Dashboard:
+
+1. Open Authentication → URL Configuration.
+2. Set Site URL to `https://contari-ten.vercel.app`.
+3. Add `https://contari-ten.vercel.app/**` to Redirect URLs.
+4. Add `http://localhost:5173/**` for local development if needed.
+
+Email magic links are enabled by default. The browser uses the publishable key only. Never put a service-role key in the frontend.
+
+## Security boundaries
+
+RLS lets anyone read encrypted locker records, while only signed-in owners can create, update, and delete their lockers. Claim inserts require a signed-in session; owners can read claims for their own lockers.
+
+The schema does not verify Tari signatures. Claim records are untrusted client reports until a verifier or Ootle contract is implemented. The decryption key is still carried in the URL fragment, so anyone with the complete link can extract it.

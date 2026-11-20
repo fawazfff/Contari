@@ -65,7 +65,9 @@ function useWallet() {
 }
 
 function Dashboard({ wallet }: { wallet: WalletSession | null }) {
-  const lockers = readLockers();
+  const [lockers, setLockers] = useState(readLockers());
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => { loadMyLockers().then(setLockers).catch(error => setLoadError(error instanceof Error ? error.message : "Could not load cloud lockers.")); }, []);
   const claims = lockers.reduce((sum, item) => sum + item.claims.length, 0);
   return <div className="page-content"><div className="page-title-row"><div><div className="eyebrow">YOUR SPACE</div><h1>Good to see you.</h1><p>Keep your private drops in one place.</p></div><Button to="/app/create"><FilePlus2 size={16}/> Create locker</Button></div><div className="stat-grid"><div className="stat-card"><span>YOUR LOCKERS</span><b>{lockers.length.toString().padStart(2,"0")}</b><small>Synced from your Contari workspace</small></div><div className="stat-card"><span>UNLOCK CLAIMS</span><b>{claims.toString().padStart(2,"0")}</b><small>Recorded on this device</small></div><div className="stat-card"><span>WALLET STATUS</span><b className="stat-status">{wallet ? "Connected" : "Not connected"}</b><small>{wallet ? shortAddress(wallet.address) : "Connect to verify access"}</small></div></div><div className="content-heading"><div><h2>Recent lockers</h2><p>Your latest private links</p></div><Link to="/app/library">View all <ArrowRight size={14}/></Link></div>{loadError && <p className="form-error">{loadError}</p>}{lockers.length ? <div className="locker-list">{lockers.slice(0,4).map(item => <LockerRow key={item.id} locker={item}/>)}</div> : <EmptyState/>}<div className="workspace-note"><Sparkles size={18}/><div><b>Start with a private note</b><p>Write something you want to share with intention. Contari encrypts the content in your browser before saving it.</p></div><Button to="/app/create" variant="secondary">Create a locker <ArrowRight size={14}/></Button></div></div>;
 }
@@ -97,7 +99,7 @@ function CreateLocker({ wallet }: { wallet: WalletSession | null }) {
       const encrypted = await encryptContent(content);
       const id = crypto.randomUUID().replaceAll("-","").slice(0,12);
       const locker: Locker = { id, title: title.trim(), description: description.trim(), ciphertext: encrypted.ciphertext, iv: encrypted.iv, createdAt: new Date().toISOString(), creator: wallet?.address || "Local demo creator", gate, allowedWallets, claims: [] };
-      saveLocker(locker);
+      await createRemoteLocker(locker);
       navigate("/l/" + id + "#key=" + encrypted.key + "&owner=1");
     } catch { setError("Your browser could not encrypt this content. Try a modern browser with Web Crypto enabled."); }
     finally { setBusy(false); }
@@ -107,7 +109,9 @@ function CreateLocker({ wallet }: { wallet: WalletSession | null }) {
 
 function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onConnect: () => Promise<void> }) {
   const { id = "" } = useParams();
-  const locker = getLocker(id);
+  const [locker, setLocker] = useState<Locker | undefined>(() => getLocker(id));
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => { let active = true; loadLocker(id).then(value => { if (active) setLocker(value); }).catch(error => { if (active) setLoadError(error instanceof Error ? error.message : "Could not load this locker."); }); return () => { active = false; }; }, [id]);
   const [content, setContent] = useState("");
   const [status, setStatus] = useState<"locked" | "unlocking" | "open" | "error">("locked");
   const [message, setMessage] = useState("");
@@ -127,8 +131,9 @@ function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onCon
       const proof = await proveWalletOwnership(activeWallet, locker.id);
       const plain = await decryptContent(locker.ciphertext, locker.iv, key);
       setContent(plain);
-      updateLocker(locker.id, current => ({...current, claims:[{address:activeWallet!.address,at:new Date().toISOString(),proof:JSON.stringify(proof)},...current.claims]}));
       setStatus("open");
+      try { await recordRemoteClaim(locker.id, activeWallet.address, proof); }
+      catch (claimError) { setMessage(claimError instanceof Error ? "Content unlocked, but the claim could not be synced: " + claimError.message : "Content unlocked, but the claim could not be synced."); }
     } catch (e) { setMessage(e instanceof Error ? e.message : "Could not unlock this content."); setStatus("error"); }
   }
   async function copyLink() {
@@ -141,7 +146,9 @@ function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onCon
 
 function Library() {
   const [items,setItems] = useState(readLockers());
-  function remove(id:string) { if(confirm("Delete this locker from this browser?")) { removeLocker(id); setItems(readLockers()); } }
+  const [error,setError] = useState("");
+  useEffect(() => { loadMyLockers().then(setItems).catch(e => setError(e instanceof Error ? e.message : "Could not load lockers.")); }, []);
+  async function remove(id:string) { if(confirm("Delete this locker from Contari?")) { try { await deleteRemoteLocker(id); setItems(readLockers()); } catch(e) { setError(e instanceof Error ? e.message : "Could not delete locker."); } } }
   return <div className="page-content"><div className="page-title-row"><div><div className="eyebrow">YOUR CONTENT</div><h1>My lockers</h1><p>Private links you have created in this browser.</p></div><Button to="/app/create"><FilePlus2 size={16}/> New locker</Button></div>{error && <p className="form-error">{error}</p>}{items.length?<div className="locker-list">{items.map(item=><div className="library-row" key={item.id}><LockerRow locker={item}/><button onClick={()=>remove(item.id)} aria-label="Delete locker"><X size={16}/></button></div>)}</div>:<EmptyState/>}</div>;
 }
 

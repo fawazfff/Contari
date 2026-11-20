@@ -1,3 +1,5 @@
+import { supabase, ensureContariSession } from "./supabase";
+
 export type Locker = {
   id: string;
   title: string;
@@ -11,28 +13,132 @@ export type Locker = {
   claims: Array<{ address: string; at: string; proof: string }>;
 };
 
+type LockerRow = {
+  id: string;
+  title: string;
+  description: string;
+  ciphertext: string;
+  iv: string;
+  gate: "wallet" | "allowlist";
+  allowed_wallets: string[];
+  creator_wallet: string;
+  created_at: string;
+};
+
 const KEY = "contari_lockers_v1";
+
+function toLocker(row: LockerRow, claims: Locker["claims"] = []): Locker {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || "",
+    ciphertext: row.ciphertext,
+    iv: row.iv,
+    createdAt: row.created_at,
+    creator: row.creator_wallet,
+    gate: row.gate,
+    allowedWallets: row.allowed_wallets || [],
+    claims,
+  };
+}
 
 export function readLockers(): Locker[] {
   try { return JSON.parse(localStorage.getItem(KEY) || "[]") as Locker[]; }
   catch { return []; }
 }
 
+function writeLocal(lockers: Locker[]) {
+  localStorage.setItem(KEY, JSON.stringify(lockers));
+}
+
 export function saveLocker(locker: Locker) {
   const all = readLockers();
-  localStorage.setItem(KEY, JSON.stringify([locker, ...all.filter(item => item.id !== locker.id)]));
+  writeLocal([locker, ...all.filter(item => item.id !== locker.id)]);
 }
 
 export function updateLocker(id: string, update: (locker: Locker) => Locker) {
-  localStorage.setItem(KEY, JSON.stringify(readLockers().map(item => item.id === id ? update(item) : item)));
+  writeLocal(readLockers().map(item => item.id === id ? update(item) : item));
 }
 
 export function removeLocker(id: string) {
-  localStorage.setItem(KEY, JSON.stringify(readLockers().filter(item => item.id !== id)));
+  writeLocal(readLockers().filter(item => item.id !== id));
 }
 
 export function getLocker(id: string) {
   return readLockers().find(item => item.id === id);
+}
+
+export async function loadLocker(id: string): Promise<Locker | undefined> {
+  const { data, error } = await supabase
+    .from("contari_lockers")
+    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,created_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return getLocker(id);
+  const { data: claimRows, error: claimError } = await supabase
+    .from("contari_claims")
+    .select("claimant_wallet,created_at,proof")
+    .eq("locker_id", id)
+    .order("created_at", { ascending: false });
+  if (claimError && claimError.code !== "42501") throw claimError;
+  const locker = toLocker(data as LockerRow, (claimRows || []).map((claim: any) => ({
+    address: claim.claimant_wallet,
+    at: claim.created_at,
+    proof: JSON.stringify(claim.proof || {}),
+  })));
+  saveLocker(locker);
+  return locker;
+}
+
+export async function loadMyLockers(): Promise<Locker[]> {
+  const session = await ensureContariSession();
+  const { data, error } = await supabase
+    .from("contari_lockers")
+    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,created_at")
+    .eq("owner_id", session.user.id)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const lockers = (data || []).map((row: LockerRow) => toLocker(row));
+  writeLocal(lockers);
+  return lockers;
+}
+
+export async function createRemoteLocker(locker: Locker) {
+  const session = await ensureContariSession();
+  const { error } = await supabase.from("contari_lockers").insert({
+    id: locker.id,
+    owner_id: session.user.id,
+    title: locker.title,
+    description: locker.description,
+    ciphertext: locker.ciphertext,
+    iv: locker.iv,
+    gate: locker.gate,
+    allowed_wallets: locker.allowedWallets,
+    creator_wallet: locker.creator,
+  });
+  if (error) throw error;
+  saveLocker(locker);
+}
+
+export async function recordRemoteClaim(lockerId: string, address: string, proof: unknown) {
+  await ensureContariSession();
+  const { error } = await supabase.from("contari_claims").insert({
+    locker_id: lockerId,
+    claimant_wallet: address,
+    proof,
+  });
+  if (error) throw error;
+  updateLocker(lockerId, current => ({
+    ...current,
+    claims: [{ address, at: new Date().toISOString(), proof: JSON.stringify(proof) }, ...current.claims],
+  }));
+}
+
+export async function deleteRemoteLocker(id: string) {
+  const { error } = await supabase.from("contari_lockers").delete().eq("id", id);
+  if (error) throw error;
+  removeLocker(id);
 }
 
 function toBase64(bytes: Uint8Array) {

@@ -8,7 +8,7 @@ mod contari {
     const WALLET_GATE: &str = "wallet";
     const ALLOWLIST_GATE: &str = "allowlist";
 
-    pub struct LockerRecord {
+    struct LockerRecord {
         locker_id_hash: String,
         creator: RistrettoPublicKeyBytes,
         network: u8,

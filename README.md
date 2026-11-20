@@ -12,7 +12,7 @@ Contari is a Tari Ootle content-locker prototype. It encrypts a note in the brow
 - Tari wallet connection through the official `window.tari` dApp connector.
 - Ootle registry transaction helpers for registering locker hashes and submitting wallet-signed claims when a published component address is configured.
 - Demo mode can request a fresh Tari wallet-ownership challenge through `tari_signWalletOwnershipChallenge`.
-- Optional allowlist check in the browser demo.
+- Browser-side allowlist feedback plus contract-side allowlist enforcement in Ootle mode.
 
 ## Important security boundaries
 

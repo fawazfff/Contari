@@ -4,7 +4,6 @@ use tari_template_lib::prelude::*;
 mod contari {
     use super::*;
     use bech32::{Bech32m, primitives::decode::CheckedHrpstring};
-    use blake2::{Blake2b, Digest, digest::consts::U64};
 
     const WALLET_GATE: &str = "wallet";
     const ALLOWLIST_GATE: &str = "allowlist";
@@ -33,8 +32,6 @@ mod contari {
             })
             .with_access_rules(
                 ComponentAccessRules::new()
-                    // These entry points are public, but every identity-sensitive action
-                    // checks the authenticated transaction signer inside the method.
                     .method("register_locker", rule!(allow_all))
                     .method("claim_locker", rule!(allow_all))
                     .method("get_counts", rule!(allow_all))
@@ -43,8 +40,7 @@ mod contari {
             .create()
         }
 
-        /// Register a locker using the authenticated creator signer. Only a hash of the
-        /// off-chain locker id is written to Ootle, never the content or decryption key.
+        /// Registers a hash only. The caller is the authenticated transaction signer.
         pub fn register_locker(
             &mut self,
             locker_id_hash: String,
@@ -55,9 +51,9 @@ mod contari {
             assert!(is_canonical_hash(&locker_id_hash), "locker id must be a 32-byte lowercase hex hash");
             assert!(gate == WALLET_GATE || gate == ALLOWLIST_GATE, "unsupported access gate");
             assert!(!self.lockers.iter().any(|item| item.locker_id_hash == locker_id_hash), "locker already registered");
+
             let creator = CallerContext::transaction_signer_public_key();
             let mut allowed_wallets = Vec::new();
-
             if gate == ALLOWLIST_GATE {
                 assert!(!allowed_wallet_addresses.is_empty(), "allowlist cannot be empty");
                 for address in allowed_wallet_addresses {
@@ -81,35 +77,18 @@ mod contari {
             emit_event("LockerRegistered", [("locker_id_hash", locker_id_hash)]);
         }
 
-        /// Verify Tari's wallet-ownership challenge on-chain and bind the claim to the
-        /// transaction's authenticated signer. A supplied address or key alone is never trusted.
-        pub fn claim_locker(
-            &mut self,
-            locker_id_hash: String,
-            network: u8,
-            wallet_address: String,
-            challenge: String,
-            public_nonce_hex: String,
-            signature_hex: String,
-        ) {
+        /// A successful wallet-signed Ootle transaction authenticates the signer.
+        /// The wallet address is decoded and its owner key must equal that signer.
+        pub fn claim_locker(&mut self, locker_id_hash: String, network: u8, wallet_address: String) {
             assert!(is_canonical_hash(&locker_id_hash), "invalid locker id hash");
             let index = self.lockers.iter().position(|item| item.locker_id_hash == locker_id_hash)
                 .expect("locker is not registered on Ootle");
             let signer = CallerContext::transaction_signer_public_key();
-            let record = &self.lockers[index];
-
-            assert!(record.network == network, "wallet network does not match locker network");
             let address_key = address_owner(&wallet_address, network).expect("invalid wallet address or network");
             assert!(address_key == signer, "wallet address does not belong to the transaction signer");
-            assert!(verify_wallet_ownership_proof(
-                network,
-                &wallet_address,
-                &challenge,
-                signer,
-                &public_nonce_hex,
-                &signature_hex,
-            ), "invalid Tari wallet ownership signature");
 
+            let record = &self.lockers[index];
+            assert!(record.network == network, "wallet network does not match locker network");
             if record.gate == ALLOWLIST_GATE {
                 assert!(record.allowed_wallets.contains(&signer), "wallet is not on the locker allowlist");
             }
@@ -165,66 +144,5 @@ mod contari {
             return None;
         }
         Some(owner)
-    }
-
-    fn domain_hash(tag: &str, fields: &[&[u8]]) -> [u8; 64] {
-        let mut hasher = Blake2b::<U64>::new();
-        hasher.update((tag.len() as u64).to_le_bytes());
-        hasher.update(tag.as_bytes());
-        for field in fields {
-            hasher.update((field.len() as u64).to_le_bytes());
-            hasher.update(field);
-        }
-        hasher.finalize().into()
-    }
-
-    fn decode_hex_32(value: &str) -> Option<[u8; 32]> {
-        if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
-            return None;
-        }
-        let mut bytes = [0u8; 32];
-        for (index, byte) in bytes.iter_mut().enumerate() {
-            *byte = u8::from_str_radix(&value[index * 2..index * 2 + 2], 16).ok()?;
-        }
-        Some(bytes)
-    }
-
-    fn verify_wallet_ownership_proof(
-        network: u8,
-        address: &str,
-        challenge: &str,
-        owner_key: RistrettoPublicKeyBytes,
-        public_nonce_hex: &str,
-        signature_hex: &str,
-    ) -> bool {
-        if challenge.is_empty() || !challenge.is_ascii() || challenge.len() > 500 {
-            return false;
-        }
-        let Some(nonce_bytes) = decode_hex_32(public_nonce_hex) else { return false; };
-        let Some(signature_bytes) = decode_hex_32(signature_hex) else { return false; };
-        let nonce: RistrettoPublicKeyBytes = nonce_bytes.into();
-        let signature: Scalar32Bytes = signature_bytes.into();
-
-        if !intrinsics::ristretto_is_canonical(&nonce)
-            || intrinsics::ristretto_is_identity(&nonce)
-            || !intrinsics::scalar_is_canonical(&signature)
-        {
-            return false;
-        }
-
-        let message = domain_hash(
-            "com.tari.paylink.wallet_ownership_proof.v1.v1",
-            &[&[network], address.as_bytes(), challenge.as_bytes()],
-        );
-        let challenge_scalar = intrinsics::scalar_from_uniform_bytes(&domain_hash(
-            "com.tari.schnorr_signature.v1.challenge",
-            &[nonce.as_bytes(), owner_key.as_bytes(), &message],
-        ));
-
-        intrinsics::ristretto_mul_base(&signature)
-            == intrinsics::ristretto_add(
-                &nonce,
-                &intrinsics::ristretto_mul(&owner_key, &challenge_scalar),
-            )
     }
 }

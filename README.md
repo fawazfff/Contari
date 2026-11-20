@@ -1,65 +1,75 @@
 # Contari
 
-Contari is an early Tari Ootle content-locker prototype. A creator writes content, the browser encrypts it with AES-GCM, and a visitor must connect a Tari wallet and sign a fresh wallet-ownership challenge before the demo reveals the content.
+Contari is a Tari Ootle content-locker prototype. It encrypts a note in the browser, stores only the encrypted payload in Supabase, and shares a link that includes the decryption key in its URL fragment.
 
-## Current implementation
+## What works
 
-- Multi-page React + TypeScript app with separate routes for the public site, workspace, locker creation, locker library, settings and public locker view.
-- Tari wallet connection through the official \`window.tari\` provider and Tari connector script.
-- Wallet ownership proof through \`tari_signWalletOwnershipChallenge\`.
-- Browser-side AES-GCM encryption. The decryption key is carried in the URL fragment, not sent in HTTP requests.
-- Optional wallet allowlist.
-- Local locker library and claim history.
+- Public landing page, product explanation, workspace, locker creation, locker library, settings, and public locker routes.
+- Browser-side AES-256-GCM encryption using the Web Crypto API.
+- Encrypted locker records stored in Supabase and retrievable from another device.
+- Email magic-link authentication for locker ownership and cloud library access.
+- Supabase Row Level Security for locker ownership, public ciphertext reads, and claim records.
+- Tari wallet connection through the official `window.tari` connector.
+- Fresh Tari wallet-ownership challenge requests through `tari_signWalletOwnershipChallenge`.
+- Optional allowlist check in the browser demo.
 
-## Important prototype limits
+## Important security boundaries
 
-This version is a functional browser demo, not a production content delivery service.
+This is not yet a production access-control system.
 
-- Locker data is stored in the creator's browser localStorage. A link opened on another device cannot retrieve the encrypted payload yet.
-- The URL fragment contains the decryption key. Anyone who receives the complete link has that key, so keep links private.
-- The wallet ownership signature is requested from the wallet, but this frontend does not yet verify the Schnorr signature against an on-chain address.
-- Claims are recorded locally. The Ootle Rust template is a starting point and is not published or connected to app transactions yet.
-- The optional allowlist is an app-side demo check, not an on-chain access rule.
-- Do not use this prototype for sensitive or valuable information.
+- The complete share URL contains the AES decryption key in its fragment. Anyone who receives the complete link can extract the key and decrypt the content outside Contari. Treat the link as a bearer secret.
+- The app requests a Tari wallet ownership signature, but it does not yet independently verify the Schnorr signature against the public key decoded from the wallet address.
+- The allowlist is checked in the browser and can be bypassed by someone who extracts the key.
+- Claim rows are records of client-reported attempts. They are not independently verified wallet identities.
+- The Rust Ootle template is not published and is not connected to the web app's transaction flow.
+- Do not use Contari for valuable, regulated, or highly confidential information.
 
-These boundaries are explicit so the demo does not pretend to provide protections it has not implemented.
+## Supabase setup
+
+The connected project already has the `contari_lockers` and `contari_claims` tables with RLS policies. The matching SQL is saved in `supabase/migrations/20261120210000_create_contari_tables.sql`.
+
+1. Open Supabase Authentication → URL Configuration.
+2. Set the Site URL to `https://contari-ten.vercel.app`.
+3. Add `https://contari-ten.vercel.app/**` to the Redirect URLs list.
+4. Email magic links are enabled by default on Supabase Auth. In Contari, enter an email in the workspace header and open the link sent to that inbox.
+5. The authenticated session owns lockers. Do not enable anonymous sign-ins for this implementation.
+
+For local development, copy `.env.example` to `.env.local` and set the project URL and publishable key. Add your local URL (for example `http://localhost:5173/**`) to Supabase Redirect URLs.
 
 ## Run locally
 
 Requires Node.js 20+.
 
-\`\`\`bash
+```bash
 npm install
 npm run dev
-\`\`\`
-
-Open the local URL printed by Vite.
+```
 
 ## Tari wallet
 
-The app loads the official Tari connector from \`https://universe.tari.mw/tari-connector.js\`. It supports the wallet provider exposed in Tari Universe and compatible Tari wallet extensions. The user approves wallet connection and the ownership challenge in their wallet.
+Contari loads the official connector from `https://universe.tari.mw/tari-connector.js`. The integration methods and capability names follow the [Tari dApp integration guide](https://universe.tari.mw/integration/). The app asks the wallet to connect and sign a fresh wallet-ownership challenge. Signature verification is still outstanding.
 
 ## Ootle template
 
-The Rust template lives in \`contracts/contari\`. Build it with:
+The Rust template lives in `contracts/contari`.
 
-\`\`\`bash
+```bash
 rustup target add wasm32-unknown-unknown
 cargo build --manifest-path contracts/contari/Cargo.toml --target wasm32-unknown-unknown --release
-\`\`\`
+```
 
-Publishing requires a running Tari Ootle wallet and TARI for fees. Do not claim a mainnet launch until the template is actually published and its transaction proof is available.
+Publishing requires a running Tari Ootle wallet and TARI for fees. Do not claim a mainnet launch until the template is published and transaction proof is available.
 
 ## Routes
 
-- \`/\` Public landing page
-- \`/how-it-works\` Product explanation
-- \`/app\` Workspace overview
-- \`/app/create\` Create and encrypt a locker
-- \`/app/library\` Browse and remove local lockers
-- \`/app/settings\` Wallet and future contract configuration
-- \`/l/:id\` Public locker view and wallet ownership challenge
+- `/` Public landing page
+- `/how-it-works` Product explanation
+- `/app` Workspace overview
+- `/app/create` Create and encrypt a locker
+- `/app/library` Browse and delete cloud lockers
+- `/app/settings` Wallet and contract settings
+- `/l/:id` Public locker view and wallet challenge
 
 ## Stack
 
-Vite, React 19, TypeScript, React Router, Lucide, Tari wallet connector, Web Crypto API.
+Vite, React, TypeScript, React Router, Supabase JS, Lucide, Tari wallet connector, Web Crypto API.

@@ -7,12 +7,22 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
+export async function sendContariSignInLink(email: string) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin },
+  });
+  if (error) {
+    if (/redirect.*not allowed|redirect.*allow/i.test(error.message)) {
+      throw new Error("Supabase blocked this sign-in redirect. Add your Contari production URL to Authentication > URL Configuration > Redirect URLs, then try again.");
+    }
+    throw error;
+  }
+}
+
 export async function ensureContariSession() {
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) throw sessionError;
-  if (session) return session;
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) throw new Error("Anonymous sign-in is not enabled for Contari yet. In Supabase, open Authentication > Sign In / Providers and enable Anonymous Sign-Ins, then reload.");
-  if (!data.session) throw new Error("Could not start a Contari session.");
-  return data.session;
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!session) throw new Error("Sign in with your email using the link in the workspace header before creating or managing lockers.");
+  return session;
 }

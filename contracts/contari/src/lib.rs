@@ -8,39 +8,32 @@ mod contari {
     const WALLET_GATE: &str = "wallet";
     const ALLOWLIST_GATE: &str = "allowlist";
 
-    struct LockerRecord {
-        locker_id_hash: String,
-        creator: RistrettoPublicKeyBytes,
-        network: u8,
-        gate: String,
-        allowed_wallets: Vec<RistrettoPublicKeyBytes>,
-        claimed_wallets: Vec<RistrettoPublicKeyBytes>,
-    }
-
     pub struct ContariRegistry {
-        lockers: Vec<LockerRecord>,
+        locker_id_hashes: Vec<String>,
+        creators: Vec<RistrettoPublicKeyBytes>,
+        networks: Vec<u8>,
+        gates: Vec<String>,
+        allowed_wallets: Vec<Vec<RistrettoPublicKeyBytes>>,
+        claimed_wallets: Vec<Vec<RistrettoPublicKeyBytes>>,
         locker_count: u64,
         claim_count: u64,
     }
 
     impl ContariRegistry {
-        pub fn new() -> Component<Self> {
-            Component::new(Self {
-                lockers: Vec::new(),
+        pub fn new() -> Self {
+            Self {
+                locker_id_hashes: Vec::new(),
+                creators: Vec::new(),
+                networks: Vec::new(),
+                gates: Vec::new(),
+                allowed_wallets: Vec::new(),
+                claimed_wallets: Vec::new(),
                 locker_count: 0,
                 claim_count: 0,
-            })
-            .with_access_rules(
-                ComponentAccessRules::new()
-                    .method("register_locker", rule!(allow_all))
-                    .method("claim_locker", rule!(allow_all))
-                    .method("get_counts", rule!(allow_all))
-                    .default(rule!(deny_all)),
-            )
-            .create()
+            }
         }
 
-        /// Registers a hash only. The caller is the authenticated transaction signer.
+        /// Registers a locker hash. The authenticated transaction signer owns it.
         pub fn register_locker(
             &mut self,
             locker_id_hash: String,
@@ -50,51 +43,48 @@ mod contari {
         ) {
             assert!(is_canonical_hash(&locker_id_hash), "locker id must be a 32-byte lowercase hex hash");
             assert!(gate == WALLET_GATE || gate == ALLOWLIST_GATE, "unsupported access gate");
-            assert!(!self.lockers.iter().any(|item| item.locker_id_hash == locker_id_hash), "locker already registered");
+            assert!(!self.locker_id_hashes.contains(&locker_id_hash), "locker already registered");
 
             let creator = CallerContext::transaction_signer_public_key();
-            let mut allowed_wallets = Vec::new();
+            let mut allowed = Vec::new();
             if gate == ALLOWLIST_GATE {
                 assert!(!allowed_wallet_addresses.is_empty(), "allowlist cannot be empty");
                 for address in allowed_wallet_addresses {
                     let key = address_owner(&address, network).expect("invalid or wrong-network allowlist address");
-                    assert!(!allowed_wallets.contains(&key), "duplicate allowlist wallet");
-                    allowed_wallets.push(key);
+                    assert!(!allowed.contains(&key), "duplicate allowlist wallet");
+                    allowed.push(key);
                 }
             } else {
                 assert!(allowed_wallet_addresses.is_empty(), "wallet gate cannot include an allowlist");
             }
 
-            self.lockers.push(LockerRecord {
-                locker_id_hash: locker_id_hash.clone(),
-                creator,
-                network,
-                gate,
-                allowed_wallets,
-                claimed_wallets: Vec::new(),
-            });
+            self.locker_id_hashes.push(locker_id_hash.clone());
+            self.creators.push(creator);
+            self.networks.push(network);
+            self.gates.push(gate);
+            self.allowed_wallets.push(allowed);
+            self.claimed_wallets.push(Vec::new());
             self.locker_count += 1;
             emit_event("LockerRegistered", [("locker_id_hash", locker_id_hash)]);
         }
 
-        /// A successful wallet-signed Ootle transaction authenticates the signer.
-        /// The wallet address is decoded and its owner key must equal that signer.
+        /// The transaction signer authenticates the wallet. The supplied address must
+        /// decode to that signer's public key and match the network recorded at creation.
         pub fn claim_locker(&mut self, locker_id_hash: String, network: u8, wallet_address: String) {
             assert!(is_canonical_hash(&locker_id_hash), "invalid locker id hash");
-            let index = self.lockers.iter().position(|item| item.locker_id_hash == locker_id_hash)
+            let index = self.locker_id_hashes.iter().position(|id| id == &locker_id_hash)
                 .expect("locker is not registered on Ootle");
             let signer = CallerContext::transaction_signer_public_key();
             let address_key = address_owner(&wallet_address, network).expect("invalid wallet address or network");
             assert!(address_key == signer, "wallet address does not belong to the transaction signer");
+            assert!(self.networks[index] == network, "wallet network does not match locker network");
 
-            let record = &self.lockers[index];
-            assert!(record.network == network, "wallet network does not match locker network");
-            if record.gate == ALLOWLIST_GATE {
-                assert!(record.allowed_wallets.contains(&signer), "wallet is not on the locker allowlist");
+            if self.gates[index] == ALLOWLIST_GATE {
+                assert!(self.allowed_wallets[index].contains(&signer), "wallet is not on the locker allowlist");
             }
-            assert!(!record.claimed_wallets.contains(&signer), "this wallet has already claimed this locker");
+            assert!(!self.claimed_wallets[index].contains(&signer), "this wallet has already claimed this locker");
 
-            self.lockers[index].claimed_wallets.push(signer);
+            self.claimed_wallets[index].push(signer);
             self.claim_count += 1;
             emit_event("LockerClaimed", [
                 ("locker_id_hash", locker_id_hash),

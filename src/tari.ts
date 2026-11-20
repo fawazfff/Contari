@@ -1,21 +1,13 @@
 export type TariWallet = {
-  isAvailable?: boolean;
   request: (args: { method: string; params?: Record<string, unknown> }) => Promise<any>;
   on?: (event: string, callback: (value: any) => void) => (() => void) | void;
 };
 
 declare global {
-  interface Window {
-    tari?: TariWallet;
-    tariUniverse?: TariWallet;
-  }
+  interface Window { tari?: TariWallet; }
 }
 
-export type WalletSession = {
-  address: string;
-  network: string;
-  wallet: TariWallet;
-};
+export type WalletSession = { address: string; network: string; wallet: TariWallet };
 
 export async function connectTari(): Promise<WalletSession> {
   const provider = window.tari;
@@ -23,6 +15,8 @@ export async function connectTari(): Promise<WalletSession> {
   const accounts = await provider.request({ method: "tari_requestAccounts" }) as string[];
   if (!accounts?.length) throw new Error("The wallet did not return an account.");
   const network = await provider.request({ method: "tari_getNetwork" }).catch(() => "unknown") as string;
+  const capabilities = await provider.request({ method: "tari_getCapabilities" }).catch(() => ({})) as { walletOwnershipProof?: boolean };
+  if (!capabilities.walletOwnershipProof) throw new Error("This Tari wallet does not report support for wallet ownership proofs.");
   return { address: accounts[0], network, wallet: provider };
 }
 
@@ -31,7 +25,9 @@ export async function proveWalletOwnership(session: WalletSession, lockerId: str
   const proof = await session.wallet.request({
     method: "tari_signWalletOwnershipChallenge",
     params: { challenge }
-  });
+  }) as { walletAddress?: string; publicNonce?: string; signature?: string };
+  if (!proof?.walletAddress || proof.walletAddress.toLowerCase() !== session.address.toLowerCase()) throw new Error("The wallet proof did not match the connected account.");
+  if (!proof.signature || !proof.publicNonce) throw new Error("The wallet did not return a complete ownership proof.");
   return { ...proof, challenge, createdAt: new Date().toISOString() };
 }
 

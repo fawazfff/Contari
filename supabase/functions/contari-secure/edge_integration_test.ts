@@ -79,7 +79,7 @@ async function call(body: Record<string, unknown>) {
   const data = await response.json();
   return { status: response.status, data };
 }
-async function challenge(wallet: ReturnType<typeof makeWallet>, lockerId: string, purpose: "create" | "unlock", networkName = network) {
+async function challenge(wallet: ReturnType<typeof makeWallet>, lockerId: string, purpose: "create" | "unlock" | "list", networkName = network) {
   const result = await call({ action: "challenge", lockerId, purpose, walletAddress: wallet.address, network: networkName });
   assertEquals(result.status, 200, JSON.stringify(result.data));
   return result.data as { id: string; challenge: string };
@@ -117,6 +117,19 @@ Deno.test("deployed secure service wraps keys and releases only to signed allowl
     key: lockerKey,
   });
   assertEquals(created.status, 201, JSON.stringify(created.data));
+
+  const publicRead = await call({ action: "read", lockerId: id });
+  assertEquals(publicRead.status, 200, JSON.stringify(publicRead.data));
+  assertEquals("allowed_wallets" in (publicRead.data.locker || {}), false);
+
+  const listChallenge = await challenge(creator, "workspace", "list");
+  const listProof = signChallenge(creator.secret, creator.address, listChallenge.challenge);
+  const listed = await call({
+    action: "list", lockerId: "workspace", challengeId: listChallenge.id,
+    walletAddress: creator.address, network, ...listProof,
+  });
+  assertEquals(listed.status, 200, JSON.stringify(listed.data));
+  assert((listed.data.lockers || []).some((row: { id: string }) => row.id === id));
 
   const outsiderChallenge = await challenge(outsider, id, "unlock");
   const outsiderProof = signChallenge(outsider.secret, outsider.address, outsiderChallenge.challenge);

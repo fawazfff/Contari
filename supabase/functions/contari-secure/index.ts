@@ -194,9 +194,13 @@ function validateLocker(body: any) {
   if (!Array.isArray(body.allowedWallets) || body.allowedWallets.length > 100) throw new Error("Invalid wallet allowlist.");
   if (body.gate === "allowlist" && body.allowedWallets.length === 0) throw new Error("Add at least one allowed wallet.");
   if (body.gate === "wallet" && body.allowedWallets.length) throw new Error("Remove the allowlist or choose selected wallets.");
+  const lockerNetwork = networkByte(body.network);
   if (body.componentAddress !== null && body.componentAddress !== undefined && body.componentAddress !== "" &&
       (typeof body.componentAddress !== "string" || !/^component_[0-9a-f]{64}$/i.test(body.componentAddress))) {
     throw new Error("The Ootle registry component address is invalid.");
+  }
+  if (lockerNetwork === 0 && !body.componentAddress) {
+    throw new Error("Mainnet lockers must be registered with a Contari Ootle component. Configure the component address before creating this locker.");
   }
 }
 Deno.serve(async (req: Request) => {
@@ -261,6 +265,7 @@ Deno.serve(async (req: Request) => {
         .eq("id", body.lockerId).single();
       if (error || !locker || locker.key_version !== 2) throw new Error("Secure locker not found. Older lockers must be recreated.");
       if (locker.creator_network !== String(body.network).trim().toLowerCase()) throw new Error("This wallet is on a different Tari network from the locker.");
+      if (network === 0 && !locker.ootle_component_address) throw new Error("This mainnet locker has no Ootle registry component configured. The key remains locked.");
       const isCreator = locker.creator_wallet.toLowerCase() === body.walletAddress.toLowerCase();
       const isAllowed = locker.gate === "wallet" ||
         (Array.isArray(locker.allowed_wallets) && locker.allowed_wallets.some((a: string) => a.toLowerCase() === body.walletAddress.toLowerCase()));

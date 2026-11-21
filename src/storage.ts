@@ -30,6 +30,20 @@ type LockerRow = {
   created_at: string;
 };
 
+async function invokeSecure(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke("contari-secure", { body });
+  if (error) {
+    let message = error.message || "Secure locker request failed.";
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      const payload = await context.clone().json().catch(() => null) as { error?: string } | null;
+      if (payload?.error) message = payload.error;
+    }
+    throw new Error(message);
+  }
+  return data as Record<string, any> | null;
+}
+
 const KEY = "contari_lockers_v1";
 
 function toLocker(row: LockerRow, claims: Locker["claims"] = []): Locker {

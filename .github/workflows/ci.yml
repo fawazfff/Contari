@@ -36,6 +36,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - run: cargo build --manifest-path contracts/contari/Cargo.toml --target wasm32-unknown-unknown --release
+      - run: cargo test --manifest-path contracts/contari/Cargo.toml
       - uses: actions/upload-artifact@v4
         with:
           name: contari-ootle-template-wasm

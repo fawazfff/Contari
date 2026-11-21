@@ -219,6 +219,7 @@ async function unwrapKey(db: any, row: { wrapped_key: string; wrap_iv: string })
 async function consumeChallenge(db: any, body: any, purpose: string) {
   const { data, error } = await db.from("contari_auth_challenges").select("*")
     .eq("id", body.challengeId).eq("purpose", purpose).eq("wallet_address", body.walletAddress)
+    .eq("locker_id", body.lockerId)
     .is("used_at", null).gt("expires_at", new Date().toISOString()).single();
   if (error || !data) throw new Error("This wallet challenge expired or has already been used. Request a new one.");
   const network = networkByte(body.network);

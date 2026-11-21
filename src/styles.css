@@ -78,3 +78,10 @@
     transition-duration:0.01ms !important;
   }
 }
+
+
+/* Wallet connection help stays readable in both the workspace header and settings. */
+.wallet-error-links, .wallet-help-links { display: block; margin-top: 7px; font-size: 12px; }
+.wallet-error-links a, .wallet-help-links a { color: inherit; text-decoration: underline; text-underline-offset: 3px; font-weight: 650; }
+.wallet-help-links { color: var(--muted, #69716f); }
+.wallet-help-links span { padding: 0 3px; }

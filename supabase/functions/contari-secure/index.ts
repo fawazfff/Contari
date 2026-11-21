@@ -30,9 +30,13 @@ function indexerUrlsFor(network: number): string[] {
   const secret = network === 0 ? "CONTARI_OOTLE_MAINNET_INDEXERS"
     : network === 38 ? "CONTARI_OOTLE_ESMERALDA_INDEXERS" : "";
   if (!secret) return [];
-  return (Deno.env.get(secret) || "")
+  const urls = (Deno.env.get(secret) || "")
     .split(",").map((value) => value.trim().replace(/\/$/, ""))
-    .filter((value) => value.startsWith("https://"));
+    .filter((value) => {
+      try { return new URL(value).protocol === "https:"; } catch { return false; }
+    });
+  // Two URLs on the same host are not independent indexer checks.
+  return [...new Map(urls.map((value) => [new URL(value).host, value])).values()];
 }
 function expectedTemplateAddress(network: number) {
   const name = network === 0 ? "CONTARI_OOTLE_MAINNET_TEMPLATE_ADDRESS"

@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.87.1";
 import { networkByte, parseAddress, verifyTariWalletProof } from "./crypto.ts";
-import { decodeLockerClaimEvent, normalizeTransactionId } from "./ootle_verification.ts";
+import { decodeLockerClaimEvent, isCommittedTransactionResult, normalizeTransactionId } from "./ootle_verification.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -133,10 +133,10 @@ async function verifyOotleClaim(
         const response = await indexerJson(base, "/transactions/" + txId + "/result");
         const result = response?.result ?? response;
         if (result?.Rejected) throw new Error("Ootle rejected the claim transaction.");
-        if (result?.Finalized) {
-          if (result.Finalized.final_decision !== "Commit") {
-            throw new Error("Ootle claim did not commit. The locker key remains locked.");
-          }
+        if (result?.Finalized && !isCommittedTransactionResult(response)) {
+          throw new Error("Ootle claim did not commit. The locker key remains locked.");
+        }
+        if (isCommittedTransactionResult(response)) {
           committed = true;
           break;
         }

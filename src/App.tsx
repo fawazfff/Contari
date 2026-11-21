@@ -114,14 +114,15 @@ function CreateLocker({ wallet, onConnect }: { wallet: WalletSession | null; onC
       if (!wallet) throw new Error("Connect your Tari wallet before creating a locker.");
       const encrypted = await encryptContent(content);
       const id = crypto.randomUUID().replaceAll("-","").slice(0,12);
-      const locker: Locker = { id, title: title.trim(), description: description.trim(), ciphertext: encrypted.ciphertext, iv: encrypted.iv, createdAt: new Date().toISOString(), creator: wallet.address, creatorNetwork: wallet.network, keyVersion: 2, gate, allowedWallets, claims: [] };
-      const componentAddress = getConfiguredOotleComponent();
+      const componentAddress = getConfiguredOotleComponent().trim();
+      if (componentAddress && !isValidOotleComponentAddress(componentAddress)) throw new Error("The saved Ootle registry address is invalid. Update it in Wallet & network settings.");
+      const locker: Locker = { id, title: title.trim(), description: description.trim(), ciphertext: encrypted.ciphertext, iv: encrypted.iv, createdAt: new Date().toISOString(), creator: wallet.address, creatorNetwork: wallet.network, keyVersion: 2, ootleComponentAddress: componentAddress || undefined, gate, allowedWallets, claims: [] };
       if (componentAddress) {
         if (!wallet.capabilities?.transactionResultLookup) throw new Error("This Tari wallet cannot confirm Ootle transactions. Locker creation is paused.");
         const registration = await registerLockerOnOotle(wallet.wallet, componentAddress, id, wallet.network, gate, allowedWallets);
         await getOotleTransactionResult(wallet.wallet, registration.transactionId);
       }
-      await createSecureLocker(locker, encrypted.key, wallet);
+      await createSecureLocker(locker, encrypted.key, wallet, componentAddress);
       navigate("/l/" + id);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not create the locker. Check your wallet connection and Supabase project settings."); }
     finally { setBusy(false); }
@@ -147,17 +148,17 @@ function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onCon
       if (!activeWallet) throw new Error("Connect your Tari wallet, then try again.");
       if (locker.keyVersion !== 2) throw new Error("This locker uses the old share-link key format. Ask its creator to create a new secure locker.");
       if (locker.creatorNetwork && locker.creatorNetwork !== activeWallet.network) throw new Error("Connect a Tari wallet on the same network used to create this locker.");
-      const componentAddress = getConfiguredOotleComponent();
-      let proof: unknown;
+      const componentAddress = locker.ootleComponentAddress || "";
+      let transactionId: string | undefined;
       if (componentAddress) {
         if (!activeWallet.capabilities?.transactionResultLookup) throw new Error("This Tari wallet cannot look up transaction results. No claim was submitted, and content remains locked.");
         const chain = await claimLockerOnOotle(activeWallet.wallet, componentAddress, locker.id, activeWallet.network, activeWallet.address);
         const finalResult = await getOotleTransactionResult(activeWallet.wallet, chain.transactionId);
-        proof = { type: "ootle-transaction", transactionId: chain.transactionId, response: finalResult };
+        transactionId = chain.transactionId;
       }
-      const releasedKey = await unlockSecureLocker(locker.id, activeWallet);
+      const releasedKey = await unlockSecureLocker(locker.id, activeWallet, transactionId);
       const plain = await decryptContent(locker.ciphertext, locker.iv, releasedKey);
-      setMessage(componentAddress ? "Ootle claim committed: " + (proof as { transactionId: string }).transactionId + ". Wallet proof verified and key released." : "Tari wallet signature verified. The server released the key after checking the access rule.");
+      setMessage(componentAddress ? "Ootle claim independently verified: " + transactionId + ". Wallet proof verified and key released." : "Tari wallet signature verified. The server released the key after checking the access rule.");
       setContent(plain);
       setStatus("open");
     } catch (e) { setMessage(e instanceof Error ? e.message : "Could not unlock this content."); setStatus("error"); }
@@ -173,7 +174,7 @@ function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onCon
     }
   }
   if (!locker) return <div className="public-locker"><div className="missing-card"><LockKeyhole size={26}/><h1>{loadError ? "Could not load locker" : "Locker not found"}</h1><p>{loadError || "This locker may have been removed or the link is incorrect."}</p><Button to="/app">Go to workspace</Button></div></div>;
-  return <div className="public-locker"><div className="public-top"><Brand/><span>PRIVATE CONTENT LINK</span><div className="public-top-actions"><Button to="/app" variant="quiet">Workspace <ArrowUpRight size={14}/></Button></div></div><div className="public-card"><div className="public-card-top"><span className="public-icon"><FileLock2 size={21}/></span><span className="secure-label"><span className="mini-dot"/> ENCRYPTED CONTENT</span></div><div className="public-title"><div className="eyebrow">CONTARI / {locker.id.toUpperCase()}</div><h1>{locker.title}</h1><p>{locker.description || "The creator has shared something privately with you."}</p></div>{status==="open"?<div className="unlocked-content"><div className="unlock-success"><CheckCircle2 size={18}/> {getConfiguredOotleComponent() ? "Ootle claim committed" : "Tari wallet verified"}</div><div className="content-paper">{content}</div><div className="claim-detail"><Fingerprint size={15}/> {message || "Wallet claim attempt recorded."} · {shortAddress(wallet?.address || "connected wallet")}</div></div>:<div className="locked-panel"><div className="big-lock"><LockKeyhole size={27}/></div><h2>This content is locked.</h2><p>{getConfiguredOotleComponent() ? "Connect your Tari wallet and approve an Ootle transaction. The contract checks the authenticated signer against the wallet address and applies the locker access rule." : "Connect your Tari wallet. Contari verifies a fresh Tari wallet signature and checks the saved access rule before releasing the decryption key. Ootle transaction enforcement can be enabled after the registry is deployed."}</p><div className="access-row"><span><Fingerprint size={15}/> Tari wallet ownership</span><span><ShieldCheck size={15}/> Fresh signature</span></div>{status==="error"&&<div className="form-error">{message}</div>}<button className="button button-dark unlock-button" onClick={unlock} disabled={status==="unlocking"}>{status==="unlocking"?"Waiting for wallet approval...":<><Wallet size={16}/> Connect & unlock <ArrowRight size={15}/></>}</button><button className="copy-link" onClick={copyLink}><Copy size={14}/>{copied?"Link copied":"Copy locker link"}</button></div>}<div className="public-foot"><span>Encrypted with AES-GCM</span><span>Wallet signature requested</span></div></div><p className="public-caption">Shared through <Brand/> · Your wallet stays in your control.</p></div>;
+  return <div className="public-locker"><div className="public-top"><Brand/><span>PRIVATE CONTENT LINK</span><div className="public-top-actions"><Button to="/app" variant="quiet">Workspace <ArrowUpRight size={14}/></Button></div></div><div className="public-card"><div className="public-card-top"><span className="public-icon"><FileLock2 size={21}/></span><span className="secure-label"><span className="mini-dot"/> ENCRYPTED CONTENT</span></div><div className="public-title"><div className="eyebrow">CONTARI / {locker.id.toUpperCase()}</div><h1>{locker.title}</h1><p>{locker.description || "The creator has shared something privately with you."}</p></div>{status==="open"?<div className="unlocked-content"><div className="unlock-success"><CheckCircle2 size={18}/> {locker.ootleComponentAddress ? "Ootle claim verified" : "Tari wallet verified"}</div><div className="content-paper">{content}</div><div className="claim-detail"><Fingerprint size={15}/> {message || "Wallet claim attempt recorded."} · {shortAddress(wallet?.address || "connected wallet")}</div></div>:<div className="locked-panel"><div className="big-lock"><LockKeyhole size={27}/></div><h2>This content is locked.</h2><p>{getConfiguredOotleComponent() ? "Connect your Tari wallet and approve an Ootle transaction. The contract checks the authenticated signer against the wallet address and applies the locker access rule." : "Connect your Tari wallet. Contari verifies a fresh Tari wallet signature and checks the saved access rule before releasing the decryption key. Ootle transaction enforcement can be enabled after the registry is deployed."}</p><div className="access-row"><span><Fingerprint size={15}/> Tari wallet ownership</span><span><ShieldCheck size={15}/> Fresh signature</span></div>{status==="error"&&<div className="form-error">{message}</div>}<button className="button button-dark unlock-button" onClick={unlock} disabled={status==="unlocking"}>{status==="unlocking"?"Waiting for wallet approval...":<><Wallet size={16}/> Connect & unlock <ArrowRight size={15}/></>}</button><button className="copy-link" onClick={copyLink}><Copy size={14}/>{copied?"Link copied":"Copy locker link"}</button></div>}<div className="public-foot"><span>Encrypted with AES-GCM</span><span>Wallet signature requested</span></div></div><p className="public-caption">Shared through <Brand/> · Your wallet stays in your control.</p></div>;
 }
 
 function Library({ wallet }: { wallet: WalletSession | null }) {

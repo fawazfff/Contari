@@ -92,6 +92,8 @@ async function indexerHasClaimEvent(
         if (normalizeTemplateAddress(event.templateAddress) !== expectedTemplate) continue;
         if (typeof event.componentAddress !== "string" ||
             event.componentAddress.toLowerCase() !== componentAddress.toLowerCase()) continue;
+        if (typeof event.payloadComponentAddress !== "string" ||
+            event.payloadComponentAddress.toLowerCase() !== componentAddress.toLowerCase()) continue;
         if (typeof event.lockerIdHash !== "string" ||
             event.lockerIdHash.toLowerCase() !== expectedLockerHash.toLowerCase()) continue;
         if (typeof event.claimantKey !== "string" ||

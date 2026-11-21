@@ -283,6 +283,21 @@ Deno.serve(async (req: Request) => {
       if (error) throw error;
       return json(200, data);
     }
+    if (body.action === "preflight") {
+      const network = networkByte(body.network);
+      const indexers = indexerUrlsFor(network);
+      if (indexers.length < 2) {
+        return json(200, { ready: false, error: "Two trusted HTTPS Ootle indexers are not configured for this network yet." });
+      }
+      let template = "";
+      try { template = normalizeTemplateAddress(expectedTemplateAddress(network)); } catch {
+        return json(200, { ready: false, error: "The published Contari template address is not configured for this network yet." });
+      }
+      if (!/^[0-9a-f]{64}$/.test(template)) {
+        return json(200, { ready: false, error: "The trusted Contari template address is invalid." });
+      }
+      return json(200, { ready: true });
+    }
     if (body.action === "read") {
       if (!validId(body.lockerId)) throw new Error("Invalid locker ID.");
       const { data, error } = await db.from("contari_lockers")

@@ -21,7 +21,7 @@ export type WalletSession = {
   };
 };
 
-function waitForTariProvider(timeoutMs = 1800): Promise<TariWallet | undefined> {
+function waitForTariProvider(timeoutMs = 5000): Promise<TariWallet | undefined> {
   if (window.tari && typeof window.tari.request === "function") return Promise.resolve(window.tari);
   return new Promise((resolve) => {
     let settled = false;

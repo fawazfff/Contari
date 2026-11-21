@@ -10,10 +10,11 @@ function b64(bytes: Uint8Array) {
 Deno.test("decodes a tagged Tari Metadata payload and matches LockerClaimed", () => {
   const hash = "a".repeat(64);
   const claimant = "b".repeat(64);
-  const payload = encode({ locker_id_hash: hash, claimant_key: claimant }, {
-    useRecords: false,
-    useTag259ForMaps: false,
-  });
+  const payloadParts = [
+    encode("locker_id_hash"), encode(hash),
+    encode("claimant_key"), encode(claimant),
+  ];
+  const payload = new Uint8Array([0xa2, ...payloadParts.flatMap(part => Array.from(part))]);
   const taggedPayload = new Uint8Array([0xd8, 0x81, ...payload]);
   const prefix = encode([null, new Uint8Array(32), "LockerClaimed"]);
   prefix[0] = 0x84; // Change the three-item array header to four items.

@@ -113,6 +113,14 @@ export async function loadMyLockers(session: WalletSession): Promise<Locker[]> {
   return lockers;
 }
 
+export async function preflightOotleGate(network: string): Promise<{ ready: boolean; error?: string }> {
+  const data = await invokeSecure({ action: "preflight", network });
+  return {
+    ready: data?.ready === true,
+    error: typeof data?.error === "string" ? data.error : undefined,
+  };
+}
+
 export async function createSecureLocker(locker: Locker, key: string, session: WalletSession, componentAddress?: string) {
   const challenge = await requestWalletChallenge(locker.id, "create", session);
   const proof = await signTariChallenge(session, challenge.challenge);

@@ -1,4 +1,4 @@
-import { supabase, ensureContariSession } from "./supabase";
+import { supabase } from "./supabase";
 
 export type Locker = {
   id: string;
@@ -91,24 +91,24 @@ export async function loadLocker(id: string): Promise<Locker | undefined> {
   return locker;
 }
 
-export async function loadMyLockers(): Promise<Locker[]> {
-  const session = await ensureContariSession();
+export async function loadMyLockers(walletAddress: string): Promise<Locker[]> {
+  const address = walletAddress.trim();
+  if (!address) return [];
   const { data, error } = await supabase
     .from("contari_lockers")
-    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,created_at,contari_claims(claimant_wallet,created_at,proof)")
-    .eq("owner_id", session.user.id)
+    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,created_at")
+    .eq("creator_wallet", address)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  const lockers = (data || []).map((row: LockerRow & { contari_claims?: Array<{ claimant_wallet: string; created_at: string; proof: unknown }> }) => toLocker(row, (row.contari_claims || []).map(claim => ({ address: claim.claimant_wallet, at: claim.created_at, proof: JSON.stringify(claim.proof || {}) }))));
+  const lockers = (data || []).map((row: LockerRow) => toLocker(row));
   writeLocal(lockers);
   return lockers;
 }
 
 export async function createRemoteLocker(locker: Locker) {
-  const session = await ensureContariSession();
   const { error } = await supabase.from("contari_lockers").insert({
     id: locker.id,
-    owner_id: session.user.id,
+    owner_id: null,
     title: locker.title,
     description: locker.description,
     ciphertext: locker.ciphertext,

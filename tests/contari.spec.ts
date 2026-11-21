@@ -8,12 +8,14 @@ async function installWallet(page: Page, address = walletAddress) {
   await page.addInitScript((account) => {
     (window as any).__testAccount = localStorage.getItem("testWallet") || account;
     (window as any).__walletCalls = [];
-    (window as any).tari = {
+    (window as any).tari = { isTariWallet: true,
       request: async ({ method, params }: { method: string; params?: Record<string, unknown> }) => {
         (window as any).__walletCalls.push(method);
         if (method === "tari_requestAccounts") return [(window as any).__testAccount || account];
         if (method === "tari_getNetwork") return "esmeralda";
-        if (method === "tari_getCapabilities") return { walletOwnershipProof: true, transactionResultLookup: false };
+        if (method === "tari_getCapabilities") return { walletOwnershipProof: true, transactionResultLookup: localStorage.getItem("testTransactionLookup") === "true" };
+        if (method === "tari_signAndSubmitTransaction") return { transactionId: "a".repeat(64) };
+        if (method === "tari_getTransactionResult") return { Finalized: { final_decision: "Commit" } };
         if (method === "tari_signWalletOwnershipChallenge") return { walletAddress: (window as any).__testAccount, signature: "test-signature", publicNonce: "test-nonce", challenge: params?.challenge };
         if (method === "tari_disconnect") return null;
         throw new Error("Unexpected wallet method: " + method);
@@ -30,12 +32,15 @@ async function mockSecureFunction(page: Page) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: "challenge-" + body.purpose, challenge: "contari:" + body.purpose + ":" + body.lockerId + ":test", expires_at: new Date(Date.now() + 300000).toISOString() }) });
     } else if (body.action === "create") {
       secureKey = body.key;
-      lockerRow = { id: body.id, title: body.title, description: body.description, ciphertext: body.ciphertext, iv: body.iv, gate: body.gate, allowed_wallets: body.allowedWallets, creator_wallet: body.walletAddress, creator_network: body.network, key_version: 2, created_at: new Date().toISOString() };
+      lockerRow = { id: body.id, title: body.title, description: body.description, ciphertext: body.ciphertext, iv: body.iv, gate: body.gate, allowed_wallets: body.allowedWallets, creator_wallet: body.walletAddress, creator_network: body.network, key_version: 2, ootle_component_address: body.componentAddress || null, created_at: new Date().toISOString() };
       await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ id: body.id, created: true }) });
     } else if (body.action === "unlock") {
       const isCreator = lockerRow && String(lockerRow.creator_wallet).toLowerCase() === String(body.walletAddress).toLowerCase();
       const isAllowed = lockerRow && (lockerRow.gate === "wallet" || (Array.isArray(lockerRow.allowed_wallets) && lockerRow.allowed_wallets.some((a: string) => a.toLowerCase() === String(body.walletAddress).toLowerCase())));
-      if (!isCreator && !isAllowed) {
+      const componentGateMissing = !!lockerRow?.ootle_component_address && String(body.transactionId || "") !== "a".repeat(64);
+      if (componentGateMissing) {
+        await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "This locker requires a finalized Ootle claim transaction." }) });
+      } else if (!isCreator && !isAllowed) {
         await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "This Tari wallet is not allowed to open this locker." }) });
       } else {
         await route.fulfill({ status: secureKey ? 200 : 404, contentType: "application/json", body: JSON.stringify(secureKey ? { key: secureKey } : { error: "missing key" }) });
@@ -218,4 +223,23 @@ test("server denies an allowlist bypass even if browser storage is tampered with
   await page.reload();
   await page.getByRole("button", { name: /connect & unlock/i }).click();
   await expect(page.getByText(/not allowed to open this locker/i)).toBeVisible();
+});
+
+test("Ootle-configured locker sends its claim transaction to the key service", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("contari_component", "component_" + "a".repeat(64));
+    localStorage.setItem("testTransactionLookup", "true");
+  });
+  await installWallet(page);
+  await page.goto("/app/create");
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
+  await page.getByLabel("Locker title").fill("Chain-checked note");
+  await page.getByLabel("Your content").fill("This requires an Ootle claim.");
+  await page.getByRole("button", { name: /encrypt & create locker/i }).click();
+  await expect(page).toHaveURL(/\/l\//);
+  await expect(page.getByRole("heading", { name: "Chain-checked note" })).toBeVisible();
+  await page.getByRole("button", { name: /connect & unlock/i }).click();
+  await expect(page.getByText(/ootle claim independently verified/i)).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__walletCalls);
+  expect(calls.filter((name: string) => name === "tari_signAndSubmitTransaction").length).toBe(2);
 });

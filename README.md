@@ -34,7 +34,7 @@ The key-vault and challenge tables deny access to `anon` and `authenticated`; on
 
 Important limits:
 1. **Old lockers are not retroactively secured.** Their old URLs still contain their original decryption keys. They are marked as legacy and the app refuses to unlock them through the new flow. Recreate those lockers and stop sharing their old links.
-2. **The secure preview enforces wallet signatures and access rules server-side.** The Ootle registry has not been published or instantiated. The normal browser flow can submit a claim when a component is configured, but the secure key-release endpoint does not yet independently verify that claim against an Ootle indexer. Do not treat the contract as a production access gate until that server-side verification is implemented.
+2. **Ootle claims are independently checked when a component is saved on a locker.** The Edge Function checks the transaction finality on a trusted public Tari indexer and requires a matching `LockerClaimed` event from that exact component, with the expected locker hash and claimant public key. Mainnet locker creation fails closed unless a component is configured. The Contari registry has not yet been published or instantiated, so the on-chain path still needs a real testnet deployment and funded-wallet test.
 3. **The master key is server-held, not end-to-end recipient encryption.** The service operator can decrypt vault-wrapped keys. For a zero-knowledge operator model, replace this with recipient-specific public-key wrapping or a recipient key agreement supported by Tari.
 4. **The wallet proof implementation must be verified against a real supported Tari wallet and negative test vectors before production.** Automated UI tests mock the wallet and Edge Function; they do not constitute a cryptographic interoperability audit.
 5. **Mainnet has not been tested with a funded Tari wallet.** Wallet prompts, contract calls, fees, and finality still require a live test.
@@ -48,7 +48,7 @@ Run `npm run build` for the production frontend build and `npm run test:e2e` for
 
 The connected Supabase project uses `contari_lockers` for encrypted locker records. The `contari-secure` Edge Function verifies Tari wallet ownership proofs, creates one-time challenges, checks allowlists, and wraps/releases AES keys. `contari_key_vault` and `contari_auth_challenges` are service-role-only. Email authentication is not used by the current app. The wallet-first migration is:
 
-`supabase/migrations/20261121070000_wallet_first_storage.sql` plus the secure key delivery migrations `20261121060429`, `20261121060446`, and `20261121060543`.
+`supabase/migrations/20261121070000_wallet_first_storage.sql` plus the secure key delivery migrations `20261121060429`, `20261121060446`, `20261121060543`, and `20261121061500`.
 
 The public locker-read policy exposes ciphertext and metadata, not plaintext. The app encrypts content before it is stored.
 
@@ -57,7 +57,7 @@ The public locker-read policy exposes ciphertext and metadata, not plaintext. Th
 The registry supports:
 
 - `register_locker`: records a locker hash, network, gate type, allowlist and authenticated transaction signer.
-- `claim_locker`: checks the transaction signer against the wallet address, checks the network and applies the selected-wallet allowlist.
+- `claim_locker`: checks the transaction signer against the wallet address, checks the network and applies the selected-wallet allowlist. It emits a `LockerClaimed` event for every successful claim so the server can independently verify each key-release request.
 - `get_counts`: reads registry counters.
 
 The contract uses the authenticated Ootle transaction signer, not a caller-supplied address, as the authority for creator and claimant identity.

@@ -306,6 +306,9 @@ Deno.serve(async (req: Request) => {
     if (body.action === "create") {
       validateLocker(body);
       const { network } = await consumeChallenge(db, body, "create");
+      if (network === 0 && !body.componentAddress) {
+        throw new Error("Mainnet lockers must be registered with a deployed Contari Ootle component before a key can be stored.");
+      }
       const allowed = body.allowedWallets.map((address: unknown) => {
         if (typeof address !== "string") throw new Error("Invalid allowlist address.");
         parseAddress(address, network);

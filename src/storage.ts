@@ -37,8 +37,8 @@ async function invokeSecure(body: Record<string, unknown>) {
   if (error) {
     let message = error.message || "Secure locker request failed.";
     const context = (error as { context?: unknown }).context;
-    if (context instanceof Response) {
-      const payload = await context.clone().json().catch(() => null) as { error?: string } | null;
+    if (context && typeof (context as Response).clone === "function") {
+      const payload = await (context as Response).clone().json().catch(() => null) as { error?: string } | null;
       if (payload?.error) message = payload.error;
     }
     throw new Error(message);

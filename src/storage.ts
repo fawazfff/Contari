@@ -8,6 +8,8 @@ export type Locker = {
   iv: string;
   createdAt: string;
   creator: string;
+  creatorNetwork?: string;
+  keyVersion?: number;
   gate: "wallet" | "allowlist";
   allowedWallets: string[];
   claims: Array<{ address: string; at: string; proof: string }>;
@@ -22,6 +24,8 @@ type LockerRow = {
   gate: "wallet" | "allowlist";
   allowed_wallets: string[];
   creator_wallet: string;
+  creator_network?: string;
+  key_version?: number;
   created_at: string;
 };
 
@@ -36,6 +40,8 @@ function toLocker(row: LockerRow, claims: Locker["claims"] = []): Locker {
     iv: row.iv,
     createdAt: row.created_at,
     creator: row.creator_wallet,
+    creatorNetwork: row.creator_network,
+    keyVersion: row.key_version ?? 1,
     gate: row.gate,
     allowedWallets: row.allowed_wallets || [],
     claims,
@@ -71,7 +77,7 @@ export function getLocker(id: string) {
 export async function loadLocker(id: string): Promise<Locker | undefined> {
   const { data, error } = await supabase
     .from("contari_lockers")
-    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,created_at")
+    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,creator_network,key_version,created_at")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -95,20 +101,40 @@ export async function loadMyLockers(walletAddress: string): Promise<Locker[]> {
   return lockers;
 }
 
-export async function createRemoteLocker(locker: Locker) {
-  const { error } = await supabase.from("contari_lockers").insert({
-    id: locker.id,
-    owner_id: null,
-    title: locker.title,
-    description: locker.description,
-    ciphertext: locker.ciphertext,
-    iv: locker.iv,
-    gate: locker.gate,
-    allowed_wallets: locker.allowedWallets,
-    creator_wallet: locker.creator,
+export async function createSecureLocker(locker: Locker, key: string, session: import("./tari").WalletSession) {
+  const challenge = await requestWalletChallenge(locker.id, "create", session);
+  const proof = await import("./tari").then(({ signTariChallenge }) => signTariChallenge(session, challenge.challenge));
+  const { data, error } = await supabase.functions.invoke("contari-secure", {
+    body: {
+      action: "create", challengeId: challenge.id, walletAddress: session.address,
+      network: session.network, signature: proof.signature, publicNonce: proof.publicNonce,
+      id: locker.id, title: locker.title, description: locker.description,
+      ciphertext: locker.ciphertext, iv: locker.iv, gate: locker.gate,
+      allowedWallets: locker.allowedWallets, key,
+    },
   });
-  if (error) throw error;
-  saveLocker(locker);
+  if (error) throw new Error(data?.error || error.message || "Secure locker creation failed.");
+  saveLocker({ ...locker, creatorNetwork: session.network, keyVersion: 2 });
+}
+async function requestWalletChallenge(lockerId: string, purpose: "create" | "unlock", session: import("./tari").WalletSession) {
+  const { data, error } = await supabase.functions.invoke("contari-secure", {
+    body: { action: "challenge", lockerId, purpose, walletAddress: session.address, network: session.network },
+  });
+  if (error || !data?.id || !data?.challenge) throw new Error(data?.error || error?.message || "Could not request a secure wallet challenge.");
+  return data as { id: string; challenge: string; expires_at: string };
+}
+export async function unlockSecureLocker(lockerId: string, session: import("./tari").WalletSession) {
+  const challenge = await requestWalletChallenge(lockerId, "unlock", session);
+  const proof = await import("./tari").then(({ signTariChallenge }) => signTariChallenge(session, challenge.challenge));
+  const { data, error } = await supabase.functions.invoke("contari-secure", {
+    body: {
+      action: "unlock", challengeId: challenge.id, lockerId,
+      walletAddress: session.address, network: session.network,
+      signature: proof.signature, publicNonce: proof.publicNonce,
+    },
+  });
+  if (error || !data?.key) throw new Error(data?.error || error?.message || "The server did not release the locker key.");
+  return data.key as string;
 }
 
 export async function deleteRemoteLocker(id: string) {

@@ -26,17 +26,18 @@ The frontend is deployed at https://contari-ten.vercel.app.
 
 The Ootle contract has compiled to WASM in GitHub Actions, but it has **not** yet been published as a mainnet template or instantiated as a mainnet component. Until that is done, the app is still in preview mode.
 
-## Security limits to fix before production
+## Security model and current limits
 
-Contari is not yet safe for sensitive content.
+New lockers use browser-side AES-256-GCM encryption. The raw AES key is sent over HTTPS to the Contari Secure Edge Function, encrypted again with a random server-held master key, and stored in a private key-vault table. The URL contains only the locker ID. A visitor must connect a Tari wallet and sign a fresh, five-minute, single-use ownership challenge. The Edge Function verifies the Tari Ristretto Schnorr signature against the owner key encoded in the Ootle address, checks the wallet network and the locker access rule, then releases the key over HTTPS.
 
-1. **The share link contains the decryption key.** Anyone with the complete link can extract the key and decrypt the content outside Contari. A secure key-release service must replace this bearer-link design.
-2. **Preview wallet challenges are not independently verified.** The preview requests `tari_signWalletOwnershipChallenge`, but the returned proof is not cryptographically verified by the app.
-3. **Cloud creator filtering is not proof of wallet ownership.** Supabase stores the creator address and filters lockers by that address. The on-chain registry is the authority for wallet ownership once deployed; database identity alone is not.
-4. **Allowlist checks in preview mode are client-side.** They become enforceable only after the Ootle registry is published, instantiated, and configured.
-5. **Mainnet has not been tested with a funded Tari wallet.** Wallet prompts, contract calls, fees, and finality must be tested against a live wallet before calling this production-ready.
+The key-vault and challenge tables deny access to `anon` and `authenticated`; only the service role can access them. The server master key is stored in a private database schema and exposed to the Edge Function only through a service-role-only function. Challenge creation is rate-limited per wallet.
 
-Do not use the preview for valuable, regulated, or highly confidential information.
+Important limits:
+1. **Old lockers are not retroactively secured.** Their old URLs still contain their original decryption keys. They are marked as legacy and the app refuses to unlock them through the new flow. Recreate those lockers and stop sharing their old links.
+2. **The secure preview enforces wallet signatures and access rules server-side.** The Ootle registry has not been published or instantiated, and server-side verification of an on-chain transaction is still a separate mainnet integration task. Do not claim on-chain enforcement is active yet.
+3. **The master key is server-held, not end-to-end recipient encryption.** The service operator can decrypt vault-wrapped keys. For a zero-knowledge operator model, replace this with recipient-specific public-key wrapping or a recipient key agreement supported by Tari.
+4. **The wallet proof implementation must be verified against a real supported Tari wallet and negative test vectors before production.** Automated UI tests mock the wallet and Edge Function; they do not constitute a cryptographic interoperability audit.
+5. **Mainnet has not been tested with a funded Tari wallet.** Wallet prompts, contract calls, fees, and finality still require a live test.
 
 ## Development checks
 

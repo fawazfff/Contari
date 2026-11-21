@@ -189,12 +189,12 @@ test("mobile sidebar opens and closes after navigation", async ({ page }) => {
 });
 
 test("configured Ootle unlock stops before submitting when result lookup is unsupported", async ({ page }) => {
-  await page.addInitScript(() => {
+  await installWallet(page);
+  await page.goto("/app/create");
+  await page.evaluate(() => {
     localStorage.setItem("contari_component", "component_" + "a".repeat(64));
     localStorage.setItem("testTransactionLookup", "true");
   });
-  await installWallet(page);
-  await page.goto("/app/create");
   await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
   await page.getByLabel("Locker title").fill("Finality guard");
   await page.getByLabel("Your content").fill("Do not open without a verified claim");

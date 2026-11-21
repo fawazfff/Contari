@@ -150,6 +150,8 @@ test("selected-wallet gate blocks an address that is not on the list", async ({ 
   await page.getByLabel("Allowed wallet addresses").fill("otl_esm_" + "f".repeat(64));
   await page.getByRole("button", { name: /encrypt & create locker/i }).click();
   await expect(page).toHaveURL(/\/l\//);
+  await page.evaluate(() => localStorage.setItem("testWallet", "otl_esm_" + "e".repeat(64)));
+  await page.reload();
   await page.getByRole("button", { name: /connect & unlock/i }).click();
   await expect(page.getByText(/not allowed to open this locker/i)).toBeVisible();
 });
@@ -187,6 +189,10 @@ test("mobile sidebar opens and closes after navigation", async ({ page }) => {
 });
 
 test("configured Ootle unlock stops before submitting when result lookup is unsupported", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("contari_component", "component_" + "a".repeat(64));
+    localStorage.setItem("testTransactionLookup", "true");
+  });
   await installWallet(page);
   await page.goto("/app/create");
   await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
@@ -194,7 +200,8 @@ test("configured Ootle unlock stops before submitting when result lookup is unsu
   await page.getByLabel("Your content").fill("Do not open without a verified claim");
   await page.getByRole("button", { name: /encrypt & create locker/i }).click();
   await expect(page).toHaveURL(/\/l\//);
-  await page.evaluate(() => localStorage.setItem("contari_component", "component_" + "a".repeat(64)));
+  await page.evaluate(() => localStorage.setItem("testTransactionLookup", "false"));
+  await page.reload();
   await page.getByRole("button", { name: /connect & unlock/i }).click();
   await expect(page.getByText(/no claim was submitted/i)).toBeVisible();
   const submitted = await page.evaluate(() => (window as any).__walletCalls.includes("tari_signAndSubmitTransaction"));

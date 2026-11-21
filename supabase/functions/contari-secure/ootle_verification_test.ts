@@ -15,17 +15,23 @@ function makeEvent(options: {
   const lockerHash = options.lockerHash ?? "a".repeat(64);
   const claimant = options.claimant ?? "b".repeat(64);
   const component = options.component ?? "component_" + "12".repeat(32);
+  const componentHex = component.replace(/^component_/, "");
+  const componentBytes = new Uint8Array(componentHex.match(/.{2}/g)!.map((byte) => parseInt(byte, 16)));
   const topic = encode(options.topic ?? "ContariRegistry.LockerClaimed");
   const encodedTemplate = encode(template);
+  const encodedComponent = encode(componentBytes);
   const metadata = encode(new Map([
     ["locker_id_hash", lockerHash],
     ["claimant_key", claimant],
-    ["component_address", component],
   ]));
+  // SubstateId::Component is variant 0 wrapping tagged ComponentAddress (tag 128).
+  const substate = new Uint8Array([0x82, 0x00, 0xd8, 0x80, ...encodedComponent]);
   // Tari Metadata is CBOR tag 129 around its map of raw-CBOR values.
-  const event = new Uint8Array(2 + 2 + encodedTemplate.length + topic.length + 2 + metadata.length);
+  const event = new Uint8Array(1 + substate.length + 2 + encodedTemplate.length + topic.length + 2 + metadata.length);
   let offset = 0;
-  event.set([0x84, 0xf6, 0xd8, 0x89], offset); offset += 4; // array(4), null substate, tag(137) template address
+  event[offset++] = 0x84; // array(4)
+  event.set(substate, offset); offset += substate.length;
+  event.set([0xd8, 0x89], offset); offset += 2; // tag(137) template address
   event.set(encodedTemplate, offset); offset += encodedTemplate.length;
   event.set(topic, offset); offset += topic.length;
   event.set([0xd8, 0x81], offset); offset += 2; // tag(129) Metadata

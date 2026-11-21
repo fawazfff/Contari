@@ -207,12 +207,13 @@ Deno.serve(async (req: Request) => {
       const network = networkByte(body.network);
       parseAddress(body.walletAddress, network);
       if (!validId(body.lockerId)) throw new Error("Invalid locker ID.");
-      if (!["create", "unlock"].includes(body.purpose)) throw new Error("Invalid wallet challenge purpose.");
+      if (!["create", "unlock", "list"].includes(body.purpose)) throw new Error("Invalid wallet challenge purpose.");
       const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
       const { count, error: rateError } = await db.from("contari_auth_challenges").select("id", { count: "exact", head: true })
         .eq("wallet_address", body.walletAddress).gte("created_at", cutoff);
       if (rateError) throw rateError;
       if ((count ?? 0) >= 10) throw new Error("Too many wallet challenges. Wait a few minutes and try again.");
+      if (body.purpose === "list" && body.lockerId !== "workspace") throw new Error("Invalid workspace challenge.");
       if (body.purpose === "unlock") {
         const { data: locker, error } = await db.from("contari_lockers").select("id,key_version")
           .eq("id", body.lockerId).single();
@@ -225,6 +226,25 @@ Deno.serve(async (req: Request) => {
       }).select("id,challenge,expires_at").single();
       if (error) throw error;
       return json(200, data);
+    }
+    if (body.action === "read") {
+      if (!validId(body.lockerId)) throw new Error("Invalid locker ID.");
+      const { data, error } = await db.from("contari_lockers")
+        .select("id,title,description,ciphertext,iv,gate,creator_wallet,creator_network,key_version,ootle_component_address,created_at")
+        .eq("id", body.lockerId).maybeSingle();
+      if (error) throw error;
+      return json(200, { locker: data ? { ...data, allowed_wallets: [] } : null });
+    }
+    if (body.action === "list") {
+      if (body.lockerId !== "workspace") throw new Error("Invalid workspace request.");
+      const { network } = await consumeChallenge(db, body, "list");
+      const { data, error } = await db.from("contari_lockers")
+        .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,creator_network,key_version,ootle_component_address,created_at")
+        .eq("creator_wallet", body.walletAddress)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return json(200, { lockers: data || [] });
     }
     if (body.action === "create") {
       validateLocker(body);

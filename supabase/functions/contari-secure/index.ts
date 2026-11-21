@@ -36,7 +36,7 @@ function hex(bytes: Uint8Array) {
 async function indexerJson(base: string, path: string) {
   const response = await fetch(base + path, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(7000),
+    signal: AbortSignal.timeout(4000),
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error("Tari indexer returned HTTP " + response.status + ".");
@@ -49,26 +49,20 @@ async function indexerHasClaimEvent(
   expectedLockerHash: string,
   expectedClaimant: string,
 ) {
-  let beforeId: string | undefined;
-  for (let page = 0; page < 4; page++) {
-    const query = new URLSearchParams({
-      topic: "LockerClaimed",
-      substate_id: componentAddress,
-      limit: "100",
-      offset: "0",
-    });
-    if (beforeId) query.set("before_id", beforeId);
-    const result = await indexerJson(base, "/transactions/events?" + query.toString());
-    const events = Array.isArray(result?.events) ? result.events : [];
-    for (const item of events) {
-      if (!Array.isArray(item) || item.length < 2) continue;
-      let eventTransactionId = "";
-      try { eventTransactionId = normalizeTransactionId(item[0]); } catch { continue; }
-      if (eventTransactionId !== transactionId) continue;
-      if (matchesLockerClaimEvent(String(item[1]), expectedLockerHash, expectedClaimant)) return true;
-    }
-    if (result?.next_before_id === undefined || result?.next_before_id === null) break;
-    beforeId = String(result.next_before_id);
+  const query = new URLSearchParams({
+    topic: "LockerClaimed",
+    substate_id: componentAddress,
+    limit: "100",
+    offset: "0",
+  });
+  const result = await indexerJson(base, "/transactions/events?" + query.toString());
+  const events = Array.isArray(result?.events) ? result.events : [];
+  for (const item of events) {
+    if (!Array.isArray(item) || item.length < 2) continue;
+    let eventTransactionId = "";
+    try { eventTransactionId = normalizeTransactionId(item[0]); } catch { continue; }
+    if (eventTransactionId !== transactionId) continue;
+    if (matchesLockerClaimEvent(String(item[1]), expectedLockerHash, expectedClaimant)) return true;
   }
   return false;
 }
@@ -84,7 +78,7 @@ async function verifyOotleClaim(
   if (!bases?.length) throw new Error("No trusted public Ootle indexer is configured for this network. The locker key remains locked.");
   let committed = false;
   let lastError: unknown;
-  for (let attempt = 0; attempt < 10 && !committed; attempt++) {
+  for (let attempt = 0; attempt < 5 && !committed; attempt++) {
     for (const base of bases) {
       try {
         const result = await indexerJson(base, "/transactions/" + txId + "/result");
@@ -102,7 +96,7 @@ async function verifyOotleClaim(
         lastError = error;
       }
     }
-    if (!committed && attempt < 9) await new Promise((resolve) => setTimeout(resolve, 500));
+    if (!committed && attempt < 4) await new Promise((resolve) => setTimeout(resolve, 500));
   }
   if (!committed) {
     throw new Error(lastError instanceof Error
@@ -112,7 +106,7 @@ async function verifyOotleClaim(
   const lockerHashBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(lockerId)));
   const expectedLockerHash = hex(lockerHashBytes);
   const expectedClaimant = hex(parseAddress(walletAddress, network));
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     for (const base of bases) {
       try {
         if (await indexerHasClaimEvent(base, txId, componentAddress, expectedLockerHash, expectedClaimant)) return;
@@ -120,7 +114,7 @@ async function verifyOotleClaim(
         lastError = error;
       }
     }
-    if (attempt < 9) await new Promise((resolve) => setTimeout(resolve, 500));
+    if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(lastError instanceof Error
     ? "The claim is finalized, but its LockerClaimed event could not be verified: " + lastError.message

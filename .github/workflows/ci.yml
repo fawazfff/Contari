@@ -17,7 +17,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - uses: denoland/setup-deno@v2
-      - run: deno test --allow-net supabase/functions/contari-secure/crypto_test.ts
+      - run: deno test --allow-net supabase/functions/contari-secure/crypto_test.ts supabase/functions/contari-secure/ootle_verification_test.ts
       - name: Test deployed secure key service
         run: deno test --allow-net --allow-env=CONTARI_SUPABASE_URL,CONTARI_SUPABASE_PUBLISHABLE_KEY supabase/functions/contari-secure/edge_integration_test.ts
         env:

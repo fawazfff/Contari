@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { signTariChallenge, type WalletSession } from "./tari";
 
 export type Locker = {
   id: string;
@@ -101,9 +102,9 @@ export async function loadMyLockers(walletAddress: string): Promise<Locker[]> {
   return lockers;
 }
 
-export async function createSecureLocker(locker: Locker, key: string, session: import("./tari").WalletSession) {
+export async function createSecureLocker(locker: Locker, key: string, session: WalletSession) {
   const challenge = await requestWalletChallenge(locker.id, "create", session);
-  const proof = await import("./tari").then(({ signTariChallenge }) => signTariChallenge(session, challenge.challenge));
+  const proof = await signTariChallenge(session, challenge.challenge);
   const { data, error } = await supabase.functions.invoke("contari-secure", {
     body: {
       action: "create", challengeId: challenge.id, walletAddress: session.address,

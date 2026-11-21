@@ -50,7 +50,7 @@ function makeWallet(networkName = network) {
   const secret = randomScalar();
   const owner = RistrettoPoint.BASE.multiply(secret).toRawBytes();
   const view = RistrettoPoint.BASE.multiply(randomScalar()).toRawBytes();
-  const address = bech32m.encode(networkName === "mainnet" ? "otl_" : "otl_esm_", bech32m.toWords(new Uint8Array([...owner, ...view])));
+  const address = bech32m.encode(networkName === "mainnet" ? "otl_" : "otl_esm_", bech32m.toWords(new Uint8Array([...owner, ...view])), 128);
   return { secret, address };
 }
 function signChallenge(secret: bigint, address: string, challenge: string, networkName = network) {

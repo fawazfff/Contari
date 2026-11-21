@@ -55,3 +55,21 @@ export function decodeLockerClaimEvent(encodedBase64: string) {
     componentAddress: field(decoded[3], "component_address"),
   };
 }
+
+export function matchesLockerClaimEvent(
+  encodedBase64: string,
+  expectedTemplateAddress: string,
+  expectedComponentAddress: string,
+  expectedLockerHash: string,
+  expectedClaimantKey: string,
+) {
+  const event = decodeLockerClaimEvent(encodedBase64);
+  return event.topic === "ContariRegistry.LockerClaimed" &&
+    event.templateAddress === expectedTemplateAddress.toLowerCase().replace(/^template_/, "").replace(/^0x/, "") &&
+    typeof event.componentAddress === "string" &&
+    event.componentAddress.toLowerCase() === expectedComponentAddress.toLowerCase() &&
+    typeof event.lockerIdHash === "string" &&
+    event.lockerIdHash.toLowerCase() === expectedLockerHash.toLowerCase() &&
+    typeof event.claimantKey === "string" &&
+    event.claimantKey.toLowerCase().replace(/^0x/, "") === expectedClaimantKey.toLowerCase().replace(/^0x/, "");
+}

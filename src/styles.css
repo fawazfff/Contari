@@ -58,3 +58,5 @@
   .hero-copy,.hero-art,.content-sheet,.proof-float,.chain-float,.orbit-one,.orbit-two { animation:none !important; }
   .feature-grid article,.gate-option,.locker-row { transition:none !important; }
 }
+
+.settings-saved { margin:10px 0 0; color:#356b45; font-size:12px; }

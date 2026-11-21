@@ -1,4 +1,7 @@
 name: Build and test Contari
+concurrency:
+  group: contari-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
     branches: [main]

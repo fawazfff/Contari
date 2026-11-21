@@ -97,11 +97,14 @@ mod contari {
             if !self.claimed_wallets[index].contains(&signer) {
                 self.claimed_wallets[index].push(signer);
                 self.claim_count += 1;
-                emit_event("LockerClaimed", [
-                    ("locker_id_hash", locker_id_hash),
-                    ("claimant_key", signer.to_string()),
-                ]);
             }
+            // Emit an event for every successful access attempt. The registry's
+            // counter remains unique per wallet, while the key-release service
+            // can independently verify each individual transaction.
+            emit_event("LockerClaimed", [
+                ("locker_id_hash", locker_id_hash),
+                ("claimant_key", signer.to_string()),
+            ]);
         }
 
         pub fn get_counts(&self) -> (u64, u64) {

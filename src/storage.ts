@@ -67,10 +67,6 @@ export function updateLocker(id: string, update: (locker: Locker) => Locker) {
   writeLocal(readLockers().map(item => item.id === id ? update(item) : item));
 }
 
-export function removeLocker(id: string) {
-  writeLocal(readLockers().filter(item => item.id !== id));
-}
-
 export function getLocker(id: string) {
   return readLockers().find(item => item.id === id);
 }
@@ -117,16 +113,17 @@ export async function createSecureLocker(locker: Locker, key: string, session: W
   if (error) throw new Error(data?.error || await edgeFunctionError(error, "Secure locker creation failed."));
   saveLocker({ ...locker, creatorNetwork: session.network, keyVersion: 2 });
 }
-async function requestWalletChallenge(lockerId: string, purpose: "create" | "unlock", session: import("./tari").WalletSession) {
+async function requestWalletChallenge(lockerId: string, purpose: "create" | "unlock", session: WalletSession) {
   const { data, error } = await supabase.functions.invoke("contari-secure", {
     body: { action: "challenge", lockerId, purpose, walletAddress: session.address, network: session.network },
   });
-  if (error || !data?.id || !data?.challenge) throw new Error(data?.error || error?.message || "Could not request a secure wallet challenge.");
+  if (error) throw new Error(data?.error || await edgeFunctionError(error, "Could not request a secure wallet challenge."));
+  if (!data?.id || !data?.challenge) throw new Error("The secure service returned an invalid wallet challenge.");
   return data as { id: string; challenge: string; expires_at: string };
 }
 export async function unlockSecureLocker(lockerId: string, session: import("./tari").WalletSession) {
   const challenge = await requestWalletChallenge(lockerId, "unlock", session);
-  const proof = await import("./tari").then(({ signTariChallenge }) => signTariChallenge(session, challenge.challenge));
+  const proof = await signTariChallenge(session, challenge.challenge);
   const { data, error } = await supabase.functions.invoke("contari-secure", {
     body: {
       action: "unlock", challengeId: challenge.id, lockerId,
@@ -137,12 +134,6 @@ export async function unlockSecureLocker(lockerId: string, session: import("./ta
   if (error) throw new Error(data?.error || await edgeFunctionError(error, "The server did not release the locker key."));
   if (typeof data?.key !== "string" || !data.key) throw new Error("The server did not release the locker key.");
   return data.key as string;
-}
-
-export async function deleteRemoteLocker(id: string) {
-  const { error } = await supabase.from("contari_lockers").delete().eq("id", id);
-  if (error) throw error;
-  removeLocker(id);
 }
 
 function toBase64(bytes: Uint8Array) {

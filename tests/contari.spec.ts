@@ -120,7 +120,7 @@ test("creates an encrypted locker and opens it with the keyless locker link", as
   await page.getByLabel("Short description").fill("For the team");
   await page.getByLabel("Your content").fill("The private launch details are here.");
   await page.getByRole("button", { name: /encrypt & create locker/i }).click();
-  await expect(page).toHaveURL(/\\/l\\/[a-f0-9]+$/);
+  await expect(page).toHaveURL(/\/l\/[a-f0-9]+$/);
   await expect(page.getByRole("heading", { name: "Launch notes" })).toBeVisible();
   await page.getByRole("button", { name: /connect & unlock/i }).click();
   await expect(page.getByText("The private launch details are here.")).toBeVisible();

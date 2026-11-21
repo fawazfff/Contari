@@ -18,8 +18,8 @@ This is the handoff for the remaining Tari deployment work. The application and 
 4. In the Tari Ootle Wallet UI, choose **Publish Template**, select the fee account, upload `contari.wasm`, estimate the fee, and publish. Do not guess the fee.
 5. After finality, copy the published template address.
 6. Instantiate the template's `ContariRegistry::new` constructor on the same network. Copy the resulting component address.
-7. Open Contari → Workspace → Wallet & network. Save the component address.
-8. Test registration, an allowed claim, a rejected allowlist claim, a wrong-network claim, a duplicate claim, and transaction-finality handling.
+7. Open Contari → Workspace → Wallet & network. Save the component address **before creating lockers**. Each new locker stores the component address it must use for claims. Mainnet locker creation is blocked until a component is configured.
+8. Test registration, an allowed claim, a rejected allowlist claim, a wrong-network claim, repeat claims (each must emit an event without increasing the unique-wallet counter), and independent indexer verification of the finalized `LockerClaimed` event.
 9. Repeat the checks on mainnet with a small test locker before inviting users.
 
 Official Tari guides:
@@ -27,7 +27,7 @@ Official Tari guides:
 - [Testing templates](https://ootle.tari.com/guides/testing-templates/)
 - [Tari dApp integration and wallet methods](https://universe.tari.mw/integration/)
 
-## Production security blocker
+## Security model and remaining production checks
 
 New lockers no longer put the AES key in the URL. The key is wrapped by a server-held AES-256-GCM master key and stored in a private key-vault table. Unlock requires a fresh, single-use Tari wallet ownership proof verified by the Edge Function, plus a server-side access-rule check. The Edge Function releases the key only after those checks pass. When a locker has a configured Ootle component, the server independently checks the transaction result and a matching `LockerClaimed` event on a trusted public indexer. It matches the locker hash and the claimant public key to the connected Tari wallet. A locker without a component is protected by the signed-wallet and server-side access checks only. The Ootle contract must never store the plaintext key.
 
@@ -40,6 +40,8 @@ npm install
 npm run build
 npx playwright install chromium
 npm run test:e2e
+deno test --allow-net supabase/functions/contari-secure/crypto_test.ts supabase/functions/contari-secure/ootle_verification_test.ts
+# CI also runs edge_integration_test.ts against the configured Supabase project
 cargo build --manifest-path contracts/contari/Cargo.toml --target wasm32-unknown-unknown --release
 ```
 

@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1.0.14";
 import { encode } from "npm:cbor-x@1.6.0";
-import { decodeLockerClaimEvent, matchesLockerClaimEvent, normalizeTransactionId } from "./ootle_verification.ts";
+import { decodeLockerClaimEvent, matchesLockerClaimEvent, normalizeTransactionId, isCommittedTransactionResult } from "./ootle_verification.ts";
 
 function b64(bytes: Uint8Array) {
   let binary = "";
@@ -56,4 +56,13 @@ Deno.test("rejects a different template, component, locker, claimant, or topic",
 Deno.test("normalizes only 32-byte transaction IDs", () => {
   assertEquals(normalizeTransactionId("0x" + "a".repeat(64)), "a".repeat(64));
   assertThrows(() => normalizeTransactionId("pending"));
+});
+
+Deno.test("accepts only committed finalized Ootle transaction results", () => {
+  assertEquals(isCommittedTransactionResult({ result: { Finalized: { final_decision: "Commit" } } }), true);
+  assertEquals(isCommittedTransactionResult({ Finalized: { final_decision: "Commit" } }), true);
+  assertEquals(isCommittedTransactionResult({ result: { Finalized: { final_decision: "Abort" } } }), false);
+  assertEquals(isCommittedTransactionResult({ result: { Pending: null } }), false);
+  assertEquals(isCommittedTransactionResult({ result: { Rejected: { details: "bad tx" } } }), false);
+  assertEquals(isCommittedTransactionResult(null), false);
 });

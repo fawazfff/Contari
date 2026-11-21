@@ -9,6 +9,7 @@ bech32 = "=0.11.1"
 
 [dev-dependencies]
 tari_template_test_tooling = "=0.49.2"
+tari_utilities = { version = "=0.10.0", default-features = false, features = ["std"] }
 
 [lib]
 crate-type = ["cdylib"]

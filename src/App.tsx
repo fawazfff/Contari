@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Check, CheckCircle2, ChevronRight, CircleHelp, Copy, FileLock2, FilePlus2, Fingerprint, FolderOpen, KeyRound, LockKeyhole, Menu, MoreHorizontal, ShieldCheck, Sparkles, Wallet, X, Zap } from "lucide-react";
 import { connectTari, disconnectTari, shortAddress, type WalletSession } from "./tari";
-import { decryptContent, encryptContent, getLocker, loadLocker, loadMyLockers, createSecureLocker, unlockSecureLocker, readLockers, saveLocker, type Locker } from "./storage";
+import { decryptContent, encryptContent, getLocker, loadLocker, loadMyLockers, createSecureLocker, unlockSecureLocker, preflightOotleGate, readLockers, saveLocker, type Locker } from "./storage";
 
 import { registerLockerOnOotle, claimLockerOnOotle, getOotleTransactionResult, getConfiguredOotleComponent, isValidOotleComponentAddress } from "./ootle";
 
@@ -119,6 +119,8 @@ function CreateLocker({ wallet, onConnect }: { wallet: WalletSession | null; onC
       if (["mainnet", "tari-mainnet"].includes(wallet.network.trim().toLowerCase()) && !componentAddress) throw new Error("Mainnet lockers require a deployed Contari Ootle component. Add it in Wallet & network settings first.");
       const locker: Locker = { id, title: title.trim(), description: description.trim(), ciphertext: encrypted.ciphertext, iv: encrypted.iv, createdAt: new Date().toISOString(), creator: wallet.address, creatorNetwork: wallet.network, keyVersion: 2, ootleComponentAddress: componentAddress || undefined, gate, allowedWallets, claims: [] };
       if (componentAddress) {
+        const readiness = await preflightOotleGate(wallet.network);
+        if (!readiness.ready) throw new Error(readiness.error || "Ootle verification is not configured for this network yet.");
         if (!wallet.capabilities?.transactionResultLookup) throw new Error("This Tari wallet cannot confirm Ootle transactions. Locker creation is paused.");
         const registration = await registerLockerOnOotle(wallet.wallet, componentAddress, id, wallet.network, gate, allowedWallets);
         await getOotleTransactionResult(wallet.wallet, registration.transactionId);

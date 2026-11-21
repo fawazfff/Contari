@@ -50,7 +50,7 @@ async function lockerHash(id: string) {
 }
 
 function networkByte(network: string) {
-  const key = network.toLowerCase();
+  const key = network.trim().toLowerCase();
   const value = NETWORK_BYTES[key];
   if (value === undefined) throw new Error("Unsupported Tari network: " + network);
   return value;
@@ -62,7 +62,7 @@ async function submitMethod(
   method: string,
   args: Array<{ Literal: string }>,
 ) {
-  if (!/^component_[0-9a-f]{64}$/i.test(componentAddress)) {
+  if (!isValidOotleComponentAddress(componentAddress)) {
     throw new Error("Enter a valid published Contari component address (component_ followed by 64 hex characters).");
   }
   const result = await wallet.request({
@@ -119,6 +119,10 @@ export async function claimLockerOnOotle(
     literal(cborText(walletAddress)),
   ];
   return submitMethod(wallet, componentAddress, "claim_locker", args);
+}
+
+export function isValidOotleComponentAddress(value: string) {
+  return /^component_[0-9a-f]{64}$/i.test(value.trim());
 }
 
 export function getConfiguredOotleComponent() {

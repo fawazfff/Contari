@@ -2,11 +2,22 @@ export type TariWallet = {
   request: (args: { method: string; params?: Record<string, unknown> }) => Promise<any>;
   on?: (event: string, callback: (value: any) => void) => (() => void) | void;
   isTariWallet?: boolean;
+  isAvailable?: boolean;
+};
+
+type TariConnection = {
+  open?: (options?: { theme?: "light" | "dark"; title?: string }) => Promise<{
+    wallet?: string;
+    provider: TariWallet;
+    accounts: string[];
+  }>;
+  disconnect?: () => Promise<void> | void;
 };
 
 declare global {
   interface Window {
     tari?: TariWallet;
+    TariConnect?: TariConnection;
   }
 }
 
@@ -14,37 +25,53 @@ export type WalletSession = {
   address: string;
   network: string;
   wallet: TariWallet;
-  capabilities?: { walletOwnershipProof?: boolean; transactionResultLookup?: boolean };
+  walletType?: string;
+  capabilities?: {
+    walletOwnershipProof?: boolean;
+    transactionResultLookup?: boolean;
+    transactionRequests?: boolean;
+  };
 };
 
-export async function connectTari(): Promise<WalletSession> {
-  const provider = window.tari;
-  if (!provider) {
-    throw new Error("No Tari wallet was found. Open Contari inside Tari Universe or install the Tari wallet connector.");
+async function resolveProvider(): Promise<{ provider: TariWallet; address: string; walletType?: string }> {
+  // Tari's official picker handles the Universe iframe, Sapient extension and
+  // optional Sapient mobile WalletConnect transport through one API.
+  if (window.TariConnect?.open) {
+    const connection = await window.TariConnect.open({ theme: "dark", title: "Connect to Contari" });
+    const provider = connection?.provider;
+    const address = connection?.accounts?.[0];
+    if (!provider || !address) throw new Error("The Tari wallet picker closed without connecting an account.");
+    return { provider, address, walletType: connection.wallet };
   }
 
+  // Compatibility fallback for an older connector or an already injected wallet.
+  const provider = window.tari;
+  if (!provider || provider.isAvailable === false) {
+    throw new Error("No Tari wallet is connected to this browser. Open Contari from universe.tari.mw, install the Sapient browser extension, or use the Tari wallet picker. Safari does not provide a Tari wallet by itself.");
+  }
   const accounts = await provider.request({ method: "tari_requestAccounts" }) as string[];
   if (!Array.isArray(accounts) || !accounts[0]) {
     throw new Error("The Tari wallet did not return a connected account.");
   }
+  return { provider, address: accounts[0] };
+}
 
+export async function connectTari(): Promise<WalletSession> {
+  const { provider, address, walletType } = await resolveProvider();
   const network = await provider.request({ method: "tari_getNetwork" }) as string;
-  const capabilities = await provider.request({ method: "tari_getCapabilities" }).catch(() => ({})) as { walletOwnershipProof?: boolean; transactionResultLookup?: boolean };
+  const capabilities = await provider.request({ method: "tari_getCapabilities" })
+    .catch(() => ({})) as WalletSession["capabilities"];
+
   if (!network || typeof network !== "string") {
     throw new Error("The Tari wallet did not return its active network.");
   }
-
-  return { address: accounts[0], network, wallet: provider, capabilities };
+  return { address, network, wallet: provider, walletType, capabilities };
 }
 
-/**
- * Demo-only wallet challenge. A returned response is not trusted as verified
- * until a verifier checks it against the owner key encoded in the address.
- * Production Ootle mode instead authenticates the wallet through the signed
- * transaction and the contract's CallerContext signer check.
- */
 export async function proveWalletOwnership(session: WalletSession, lockerId: string) {
-  if (!session.capabilities?.walletOwnershipProof) throw new Error("This Tari wallet does not support wallet ownership proofs. Update the wallet or use another connected Tari wallet.");
+  if (!session.capabilities?.walletOwnershipProof) {
+    throw new Error("This Tari wallet does not support wallet ownership proofs. Update the wallet or use another connected Tari wallet.");
+  }
   const challenge = "contari-access:" + lockerId + ":" + crypto.randomUUID() + ":" + Date.now();
   const proof = await session.wallet.request({
     method: "tari_signWalletOwnershipChallenge",
@@ -62,7 +89,16 @@ export async function proveWalletOwnership(session: WalletSession, lockerId: str
 
 export async function disconnectTari(session?: WalletSession) {
   const provider = session?.wallet ?? window.tari;
-  if (provider) await provider.request({ method: "tari_disconnect" }).catch(() => null);
+  try {
+    await provider?.request({ method: "tari_disconnect" });
+  } catch {
+    // Some wallet transports only support disconnect through the picker.
+  }
+  try {
+    await window.TariConnect?.disconnect?.();
+  } catch {
+    // Local app state is still cleared by the caller.
+  }
 }
 
 export function shortAddress(address: string) {

@@ -256,3 +256,18 @@ test("Ootle-configured locker sends its claim transaction to the key service", a
   const calls = await page.evaluate(() => (window as any).__walletCalls);
   expect(calls.filter((name: string) => name === "tari_signAndSubmitTransaction").length).toBe(2);
 });
+
+test("workspace library uses a signed wallet challenge to list owned lockers", async ({ page }) => {
+  await installWallet(page);
+  await page.goto("/app/create");
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
+  await page.getByLabel("Locker title").fill("My saved locker");
+  await page.getByLabel("Your content").fill("Private content stays in the key vault.");
+  await page.getByRole("button", { name: /encrypt & create locker/i }).click();
+  await expect(page).toHaveURL(/\/l\//);
+  await page.getByRole("link", { name: /back to workspace/i }).click();
+  await expect(page.getByRole("heading", { name: /your lockers/i })).toBeVisible();
+  await expect(page.getByText("My saved locker")).toBeVisible();
+  const listChallenge = await page.evaluate(() => (window as any).__walletCalls.includes("tari_signWalletOwnershipChallenge"));
+  expect(listChallenge).toBe(true);
+});

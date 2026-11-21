@@ -86,7 +86,7 @@ test("wallet connects and can be disconnected from settings", async ({ page }) =
   await installWallet(page);
   await page.goto("/app/settings");
   await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
-  await expect(page.getByText(walletAddress.slice(0, 10))).toBeVisible();
+  await expect(page.getByRole("button", { name: /otl_esm_01/ })).toBeVisible();
   await page.getByRole("button", { name: /disconnect/i }).click();
   await expect(page.getByRole("button", { name: "Connect wallet", exact: true })).toBeVisible();
 });
@@ -95,7 +95,7 @@ test("creates an encrypted locker and opens it with the complete preview link", 
   await installWallet(page);
   await page.goto("/app/create");
   await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
-  await expect(page.getByText(walletAddress.slice(0, 10))).toBeVisible();
+  await expect(page.getByRole("button", { name: /otl_esm_01/ })).toBeVisible();
   await page.getByLabel("Locker title").fill("Launch notes");
   await page.getByLabel("Short description").fill("For the team");
   await page.getByLabel("Your content").fill("The private launch details are here.");

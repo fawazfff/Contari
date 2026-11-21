@@ -59,13 +59,15 @@ test("landing navigation and main routes render", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /your lockers/i })).toBeVisible();
 });
 
-test("create form blocks empty submissions and requires a wallet", async ({ page }) => {
+test("create form requires a wallet and validates empty content", async ({ page }) => {
   await page.goto("/app/create");
   await expect(page.getByRole("button", { name: /connect wallet first/i })).toBeDisabled();
-  await page.getByLabel("Locker title").fill("A private note");
-  await page.getByLabel("Your content").fill("This should stay encrypted");
-  await expect(page.getByText(/connect your tari wallet before creating/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /connect wallet/i }).first()).toBeVisible();
+  await expect(page.getByText(/connect a tari wallet to continue/i)).toBeVisible();
+  await installWallet(page);
+  await page.reload();
+  await page.getByRole("button", { name: /connect wallet/i }).click();
+  await page.getByRole("button", { name: /encrypt & create locker/i }).click();
+  await expect(page.getByText(/add a title and the content you want to lock/i)).toBeVisible();
 });
 
 test("settings reject malformed component addresses and save a valid-shaped value", async ({ page }) => {

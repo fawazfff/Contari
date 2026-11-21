@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 const walletAddress = "otl_esm_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 let lockerRow: Record<string, unknown> | null = null;
+let secureKey = "";
 
 async function installWallet(page: Page, address = walletAddress) {
   await page.addInitScript((account) => {
@@ -18,6 +19,24 @@ async function installWallet(page: Page, address = walletAddress) {
       },
     };
   }, address);
+}
+
+async function mockSecureFunction(page: Page) {
+  secureKey = "";
+  await page.route("**/functions/v1/contari-secure", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, any>;
+    if (body.action === "challenge") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: "challenge-" + body.purpose, challenge: "contari:" + body.purpose + ":" + body.lockerId + ":test", expires_at: new Date(Date.now() + 300000).toISOString() }) });
+    } else if (body.action === "create") {
+      secureKey = body.key;
+      lockerRow = { id: body.id, title: body.title, description: body.description, ciphertext: body.ciphertext, iv: body.iv, gate: body.gate, allowed_wallets: body.allowedWallets, creator_wallet: body.walletAddress, creator_network: body.network, key_version: 2, created_at: new Date().toISOString() };
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ id: body.id, created: true }) });
+    } else if (body.action === "unlock") {
+      await route.fulfill({ status: secureKey ? 200 : 404, contentType: "application/json", body: JSON.stringify(secureKey ? { key: secureKey } : { error: "missing key" }) });
+    } else {
+      await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "unknown action" }) });
+    }
+  });
 }
 
 async function mockSupabase(page: Page) {
@@ -48,6 +67,7 @@ async function mockSupabase(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await mockSupabase(page);
+  await mockSecureFunction(page);
 });
 
 test("landing navigation and main routes render", async ({ page }) => {
@@ -104,7 +124,7 @@ test("creates an encrypted locker and opens it with the complete preview link", 
   await expect(page.getByRole("heading", { name: "Launch notes" })).toBeVisible();
   await page.getByRole("button", { name: /connect & unlock/i }).click();
   await expect(page.getByText("The private launch details are here.")).toBeVisible();
-  await expect(page.getByText(/wallet challenge received/i)).toBeVisible();
+  await expect(page.getByText(/tari wallet verified/i)).toBeVisible();
 });
 
 test("selected-wallet gate blocks an address that is not on the list", async ({ page }) => {

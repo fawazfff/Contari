@@ -76,17 +76,7 @@ export async function loadLocker(id: string): Promise<Locker | undefined> {
     .maybeSingle();
   if (error) throw error;
   if (!data) return getLocker(id);
-  const { data: claimRows, error: claimError } = await supabase
-    .from("contari_claims")
-    .select("claimant_wallet,created_at,proof")
-    .eq("locker_id", id)
-    .order("created_at", { ascending: false });
-  if (claimError && claimError.code !== "42501") throw claimError;
-  const locker = toLocker(data as LockerRow, (claimRows || []).map((claim: any) => ({
-    address: claim.claimant_wallet,
-    at: claim.created_at,
-    proof: JSON.stringify(claim.proof || {}),
-  })));
+  const locker = toLocker(data as LockerRow);
   saveLocker(locker);
   return locker;
 }
@@ -119,20 +109,6 @@ export async function createRemoteLocker(locker: Locker) {
   });
   if (error) throw error;
   saveLocker(locker);
-}
-
-export async function recordRemoteClaim(lockerId: string, address: string, proof: unknown) {
-  await ensureContariSession();
-  const { error } = await supabase.from("contari_claims").insert({
-    locker_id: lockerId,
-    claimant_wallet: address,
-    proof,
-  });
-  if (error) throw error;
-  updateLocker(lockerId, current => ({
-    ...current,
-    claims: [{ address, at: new Date().toISOString(), proof: JSON.stringify(proof) }, ...current.claims],
-  }));
 }
 
 export async function deleteRemoteLocker(id: string) {

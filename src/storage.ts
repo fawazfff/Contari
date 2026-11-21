@@ -89,28 +89,24 @@ export function getLocker(id: string) {
 }
 
 export async function loadLocker(id: string): Promise<Locker | undefined> {
-  const { data, error } = await supabase
-    .from("contari_lockers")
-    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,creator_network,key_version,ootle_component_address,created_at")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return getLocker(id);
-  const locker = toLocker(data as LockerRow);
+  const data = await invokeSecure({ action: "read", lockerId: id });
+  if (!data?.locker) return getLocker(id);
+  const locker = toLocker(data.locker as LockerRow);
   saveLocker(locker);
   return locker;
 }
 
-export async function loadMyLockers(walletAddress: string): Promise<Locker[]> {
-  const address = walletAddress.trim();
-  if (!address) return [];
-  const { data, error } = await supabase
-    .from("contari_lockers")
-    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,creator_network,key_version,ootle_component_address,created_at")
-    .eq("creator_wallet", address)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  const lockers = (data || []).map((row: LockerRow) => toLocker(row));
+export async function loadMyLockers(session: WalletSession): Promise<Locker[]> {
+  const challenge = await requestWalletChallenge("workspace", "list", session);
+  const proof = await signTariChallenge(session, challenge.challenge);
+  const data = await invokeSecure({
+    action: "list", lockerId: "workspace", challengeId: challenge.id,
+    walletAddress: session.address, network: session.network,
+    signature: proof.signature, publicNonce: proof.publicNonce,
+  });
+  const lockers = Array.isArray(data?.lockers)
+    ? data.lockers.map((row: LockerRow) => toLocker(row))
+    : [];
   writeLocal(lockers);
   return lockers;
 }
@@ -127,7 +123,7 @@ export async function createSecureLocker(locker: Locker, key: string, session: W
   });
   saveLocker({ ...locker, creatorNetwork: session.network, keyVersion: 2, ootleComponentAddress: componentAddress || undefined });
 }
-async function requestWalletChallenge(lockerId: string, purpose: "create" | "unlock", session: WalletSession) {
+async function requestWalletChallenge(lockerId: string, purpose: "create" | "unlock" | "list", session: WalletSession) {
   const data = await invokeSecure({
     action: "challenge", lockerId, purpose, walletAddress: session.address, network: session.network,
   });

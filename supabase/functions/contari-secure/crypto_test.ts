@@ -46,7 +46,7 @@ function makeFixture() {
   const nonceSecret = randomScalar();
   const owner = RistrettoPoint.BASE.multiply(secret).toRawBytes();
   const view = RistrettoPoint.BASE.multiply(randomScalar()).toRawBytes();
-  const address = bech32m.encode("otl_esm_", bech32m.toWords(new Uint8Array([...owner, ...view])));
+  const address = bech32m.encode("otl_esm_", bech32m.toWords(new Uint8Array([...owner, ...view])), 128);
   const challenge = "contari:unlock:123456abcdef:fixture";
   const nonce = RistrettoPoint.BASE.multiply(nonceSecret).toRawBytes();
   const message = domainHash("com.tari.paylink.wallet_ownership_proof.v1.v1", [

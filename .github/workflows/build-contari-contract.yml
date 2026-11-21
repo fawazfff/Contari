@@ -1,0 +1,47 @@
+name: Build Contari Ootle Contract
+
+on:
+  push:
+    paths:
+      - "contracts/contari/**"
+      - ".github/workflows/build-contari-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust and WebAssembly target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts/contari
+
+      - name: Run contract tests
+        run: cargo test --manifest-path contracts/contari/Cargo.toml
+
+      - name: Build release WASM
+        run: cargo build --manifest-path contracts/contari/Cargo.toml --target wasm32-unknown-unknown --release
+
+      - name: Check WASM size
+        run: |
+          ls -lh contracts/contari/target/wasm32-unknown-unknown/release/contari.wasm
+          test "$(stat -c%s contracts/contari/target/wasm32-unknown-unknown/release/contari.wasm)" -le 1048576
+
+      - name: Upload contract WASM
+        uses: actions/upload-artifact@v4
+        with:
+          name: contari-ootle-mainnet-wasm
+          path: contracts/contari/target/wasm32-unknown-unknown/release/contari.wasm
+          if-no-files-found: error
+          retention-days: 14

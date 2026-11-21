@@ -1,7 +1,9 @@
 use bech32::{Bech32m, Hrp, encode};
 use tari_template_test_tooling::{TemplateTest, transaction::args};
+use tari_utilities::byte_array::ByteArray;
 
-fn ootle_address(owner_key: &[u8; 32], hrp: &str) -> String {
+fn ootle_address(owner_key: &[u8], hrp: &str) -> String {
+    assert_eq!(owner_key.len(), 32);
     let mut payload = Vec::with_capacity(64);
     payload.extend_from_slice(owner_key);
     payload.extend_from_slice(owner_key);

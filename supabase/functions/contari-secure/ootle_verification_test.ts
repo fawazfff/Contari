@@ -7,13 +7,20 @@ function b64(bytes: Uint8Array) {
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary);
 }
-Deno.test("decodes and matches a Tari LockerClaimed event", () => {
+Deno.test("decodes a tagged Tari Metadata payload and matches LockerClaimed", () => {
   const hash = "a".repeat(64);
   const claimant = "b".repeat(64);
-  const encoded = b64(encode([null, new Uint8Array(32), "LockerClaimed", {
-    locker_id_hash: hash,
-    claimant_key: claimant,
-  }]));
+  const payload = encode({ locker_id_hash: hash, claimant_key: claimant }, {
+    useRecords: false,
+    useTag259ForMaps: false,
+  });
+  const taggedPayload = new Uint8Array([0xd8, 0x81, ...payload]);
+  const prefix = encode([null, new Uint8Array(32), "LockerClaimed"]);
+  prefix[0] = 0x84; // Change the three-item array header to four items.
+  const eventBytes = new Uint8Array(prefix.length + taggedPayload.length);
+  eventBytes.set(prefix);
+  eventBytes.set(taggedPayload, prefix.length);
+  const encoded = b64(eventBytes);
   const event = decodeLockerClaimEvent(encoded);
   assertEquals(event.topic, "LockerClaimed");
   assertEquals(matchesLockerClaimEvent(encoded, hash, claimant), true);

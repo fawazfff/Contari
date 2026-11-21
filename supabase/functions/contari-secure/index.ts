@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.87.1";
 import { networkByte, parseAddress, verifyTariWalletProof } from "./crypto.ts";
-import { matchesLockerClaimEvent, normalizeTransactionId } from "./ootle_verification.ts";
+import { decodeLockerClaimEvent, normalizeTransactionId } from "./ootle_verification.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -26,17 +26,41 @@ function fromB64url(value: string) {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
-const indexerUrls: Record<number, string[]> = {
-  0: ["https://indexer-a.ootle.tari.com", "https://indexer-b.ootle.tari.com"],
-  38: ["https://esme-indexer-a.ootle.com", "https://esme-indexer-b.ootle.com"],
-};
+function indexerUrlsFor(network: number): string[] {
+  if (network === 38) {
+    return [
+      "https://esme-indexer-a.ootle.tari.com",
+      "https://esme-indexer-b.ootle.tari.com",
+    ];
+  }
+  if (network === 0) {
+    // Mainnet indexers and the template address are deliberately supplied as
+    // Supabase secrets so we never guess at a production endpoint.
+    return (Deno.env.get("CONTARI_OOTLE_MAINNET_INDEXERS") || "")
+      .split(",").map((value) => value.trim().replace(/\/$/, ""))
+      .filter((value) => value.startsWith("https://"));
+  }
+  return [];
+}
+function expectedTemplateAddress(network: number) {
+  const name = network === 0 ? "CONTARI_OOTLE_MAINNET_TEMPLATE_ADDRESS"
+    : network === 38 ? "CONTARI_OOTLE_ESMERALDA_TEMPLATE_ADDRESS" : "";
+  const value = name ? Deno.env.get(name)?.trim() || "" : "";
+  if (!value) throw new Error("The trusted Contari template address is not configured for this network. The locker key remains locked.");
+  return value;
+}
 function hex(bytes: Uint8Array) {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+function normalizeTemplateAddress(value: unknown) {
+  if (value instanceof Uint8Array) return hex(value);
+  if (typeof value !== "string") return "";
+  return value.trim().toLowerCase().replace(/^template_/, "").replace(/^0x/, "");
 }
 async function indexerJson(base: string, path: string) {
   const response = await fetch(base + path, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(4000),
+    signal: AbortSignal.timeout(7000),
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error("Tari indexer returned HTTP " + response.status + ".");
@@ -46,23 +70,43 @@ async function indexerHasClaimEvent(
   base: string,
   transactionId: string,
   componentAddress: string,
+  expectedTemplate: string,
   expectedLockerHash: string,
   expectedClaimant: string,
 ) {
-  const query = new URLSearchParams({
-    topic: "LockerClaimed",
-    substate_id: componentAddress,
-    limit: "100",
-    offset: "0",
-  });
-  const result = await indexerJson(base, "/transactions/events?" + query.toString());
-  const events = Array.isArray(result?.events) ? result.events : [];
-  for (const item of events) {
-    if (!Array.isArray(item) || item.length < 2) continue;
-    let eventTransactionId = "";
-    try { eventTransactionId = normalizeTransactionId(item[0]); } catch { continue; }
-    if (eventTransactionId !== transactionId) continue;
-    if (matchesLockerClaimEvent(String(item[1]), expectedLockerHash, expectedClaimant)) return true;
+  let beforeId: string | undefined;
+  for (let page = 0; page < 25; page++) {
+    const query = new URLSearchParams({
+      topic: "ContariRegistry.LockerClaimed",
+      limit: "100",
+      offset: "0",
+    });
+    if (beforeId) query.set("before_id", beforeId);
+    const result = await indexerJson(base, "/transactions/events?" + query.toString());
+    const events = Array.isArray(result?.events) ? result.events : [];
+    for (const item of events) {
+      if (!Array.isArray(item) || item.length < 2) continue;
+      let eventTransactionId = "";
+      try { eventTransactionId = normalizeTransactionId(item[0]); } catch { continue; }
+      if (eventTransactionId !== transactionId || typeof item[1] !== "string") continue;
+      try {
+        const event = decodeLockerClaimEvent(item[1]);
+        if (event.topic !== "ContariRegistry.LockerClaimed") continue;
+        if (normalizeTemplateAddress(event.templateAddress) !== expectedTemplate) continue;
+        if (typeof event.componentAddress !== "string" ||
+            event.componentAddress.toLowerCase() !== componentAddress.toLowerCase()) continue;
+        if (typeof event.lockerIdHash !== "string" ||
+            event.lockerIdHash.toLowerCase() !== expectedLockerHash.toLowerCase()) continue;
+        if (typeof event.claimantKey !== "string" ||
+            event.claimantKey.toLowerCase().replace(/^0x/, "") !== expectedClaimant.toLowerCase()) continue;
+        return true;
+      } catch {
+        // Ignore unrelated or malformed events. The key stays locked unless
+        // the exact event from the configured template and component is found.
+      }
+    }
+    if (result?.next_before_id === undefined || result?.next_before_id === null) break;
+    beforeId = String(result.next_before_id);
   }
   return false;
 }
@@ -74,17 +118,30 @@ async function verifyOotleClaim(
   walletAddress: string,
 ) {
   const txId = normalizeTransactionId(transactionIdValue);
-  const bases = indexerUrls[network];
-  if (!bases?.length) throw new Error("No trusted public Ootle indexer is configured for this network. The locker key remains locked.");
-  let committed = false;
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 5 && !committed; attempt++) {
-    for (const base of bases) {
+  const bases = indexerUrlsFor(network);
+  if (bases.length < 2) {
+    throw new Error("Two trusted public Ootle indexers are required for this network. The locker key remains locked.");
+  }
+  const expectedTemplate = normalizeTemplateAddress(expectedTemplateAddress(network));
+  if (!/^[0-9a-f]{64}$/.test(expectedTemplate)) {
+    throw new Error("The configured Contari template address is invalid. The locker key remains locked.");
+  }
+
+  const lockerHashBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(lockerId)));
+  const expectedLockerHash = hex(lockerHashBytes);
+  const expectedClaimant = hex(parseAddress(walletAddress, network));
+
+  // Require both independent indexers to agree. A single indexer response is
+  // not enough to release a key.
+  for (const base of bases.slice(0, 2)) {
+    let committed = false;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 10 && !committed; attempt++) {
       try {
-        const result = await indexerJson(base, "/transactions/" + txId + "/result");
-        if (!result) continue;
-        if (result.Rejected) throw new Error("Ootle rejected the claim transaction.");
-        if (result.Finalized) {
+        const response = await indexerJson(base, "/transactions/" + txId + "/result");
+        const result = response?.result ?? response;
+        if (result?.Rejected) throw new Error("Ootle rejected the claim transaction.");
+        if (result?.Finalized) {
           if (result.Finalized.final_decision !== "Commit") {
             throw new Error("Ootle claim did not commit. The locker key remains locked.");
           }
@@ -95,30 +152,30 @@ async function verifyOotleClaim(
         if (error instanceof Error && /did not commit|rejected the claim/.test(error.message)) throw error;
         lastError = error;
       }
+      if (!committed && attempt < 9) await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    if (!committed && attempt < 4) await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  if (!committed) {
-    throw new Error(lastError instanceof Error
-      ? "Could not confirm the Ootle claim with a trusted indexer: " + lastError.message
-      : "The Ootle claim is not finalized on the public indexer yet. The locker key remains locked.");
-  }
-  const lockerHashBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(lockerId)));
-  const expectedLockerHash = hex(lockerHashBytes);
-  const expectedClaimant = hex(parseAddress(walletAddress, network));
-  for (let attempt = 0; attempt < 5; attempt++) {
-    for (const base of bases) {
+    if (!committed) {
+      throw new Error(lastError instanceof Error
+        ? "Could not confirm the Ootle claim with both trusted indexers: " + lastError.message
+        : "The Ootle claim is not finalized on both public indexers yet. The locker key remains locked.");
+    }
+    let eventFound = false;
+    for (let attempt = 0; attempt < 10 && !eventFound; attempt++) {
       try {
-        if (await indexerHasClaimEvent(base, txId, componentAddress, expectedLockerHash, expectedClaimant)) return;
+        eventFound = await indexerHasClaimEvent(
+          base, txId, componentAddress, expectedTemplate, expectedLockerHash, expectedClaimant,
+        );
       } catch (error) {
         lastError = error;
       }
+      if (!eventFound && attempt < 9) await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 500));
+    if (!eventFound) {
+      throw new Error(lastError instanceof Error
+        ? "The claim was finalized, but the expected Contari event could not be verified: " + lastError.message
+        : "The claim was finalized, but the expected Contari event from this template and component was not found. The locker key remains locked.");
+    }
   }
-  throw new Error(lastError instanceof Error
-    ? "The claim is finalized, but its LockerClaimed event could not be verified: " + lastError.message
-    : "The claim is finalized, but the expected LockerClaimed event was not found. The locker key remains locked.");
 }
 
 async function getService() {

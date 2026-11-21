@@ -16,6 +16,8 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - uses: denoland/setup-deno@v2
+      - run: deno test supabase/functions/contari-secure/crypto_test.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -2,22 +2,11 @@ export type TariWallet = {
   request: (args: { method: string; params?: Record<string, unknown> }) => Promise<any>;
   on?: (event: string, callback: (value: any) => void) => (() => void) | void;
   isTariWallet?: boolean;
-  isAvailable?: boolean;
-};
-
-type TariConnection = {
-  open?: (options?: { theme?: "light" | "dark"; title?: string }) => Promise<{
-    wallet?: string;
-    provider: TariWallet;
-    accounts: string[];
-  }>;
-  disconnect?: () => Promise<void> | void;
 };
 
 declare global {
   interface Window {
     tari?: TariWallet;
-    TariConnect?: TariConnection;
   }
 }
 
@@ -25,7 +14,6 @@ export type WalletSession = {
   address: string;
   network: string;
   wallet: TariWallet;
-  walletType?: string;
   capabilities?: {
     walletOwnershipProof?: boolean;
     transactionResultLookup?: boolean;
@@ -33,31 +21,36 @@ export type WalletSession = {
   };
 };
 
-async function resolveProvider(): Promise<{ provider: TariWallet; address: string; walletType?: string }> {
-  // Tari's official picker handles the Universe iframe, Sapient extension and
-  // optional Sapient mobile WalletConnect transport through one API.
-  if (window.TariConnect?.open) {
-    const connection = await window.TariConnect.open({ theme: "dark", title: "Connect to Contari" });
-    const provider = connection?.provider;
-    const address = connection?.accounts?.[0];
-    if (!provider || !address) throw new Error("The Tari wallet picker closed without connecting an account.");
-    return { provider, address, walletType: connection.wallet };
-  }
-
-  // Compatibility fallback for an older connector or an already injected wallet.
-  const provider = window.tari;
-  if (!provider || provider.isAvailable === false) {
-    throw new Error("No Tari wallet is connected to this browser. Open Contari from universe.tari.mw, install the Sapient browser extension, or use the Tari wallet picker. Safari does not provide a Tari wallet by itself.");
-  }
-  const accounts = await provider.request({ method: "tari_requestAccounts" }) as string[];
-  if (!Array.isArray(accounts) || !accounts[0]) {
-    throw new Error("The Tari wallet did not return a connected account.");
-  }
-  return { provider, address: accounts[0] };
+function waitForTariProvider(timeoutMs = 1800): Promise<TariWallet | undefined> {
+  if (window.tari?.isTariWallet) return Promise.resolve(window.tari);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (provider?: TariWallet) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("tari#initialized", onInitialized);
+      window.clearTimeout(timer);
+      resolve(provider);
+    };
+    const onInitialized = () => finish(window.tari);
+    window.addEventListener("tari#initialized", onInitialized, { once: true });
+    const timer = window.setTimeout(() => finish(window.tari), timeoutMs);
+  });
 }
 
 export async function connectTari(): Promise<WalletSession> {
-  const { provider, address, walletType } = await resolveProvider();
+  const provider = await waitForTariProvider();
+  if (!provider || typeof provider.request !== "function") {
+    throw new Error(
+      "Tari wallet not found in this browser. Open Contari from the Tari Universe web app at universe.tari.mw, or install and connect the Sapient Tari Ootle browser extension. Opening contari-ten.vercel.app in a normal browser tab does not inject a wallet by itself."
+    );
+  }
+
+  const accounts = await provider.request({ method: "tari_requestAccounts" }) as string[];
+  if (!Array.isArray(accounts) || !accounts[0]) {
+    throw new Error("No Tari account was selected. Approve the connection in your Tari wallet, then try again.");
+  }
+
   const network = await provider.request({ method: "tari_getNetwork" }) as string;
   const capabilities = await provider.request({ method: "tari_getCapabilities" })
     .catch(() => ({})) as WalletSession["capabilities"];
@@ -65,7 +58,7 @@ export async function connectTari(): Promise<WalletSession> {
   if (!network || typeof network !== "string") {
     throw new Error("The Tari wallet did not return its active network.");
   }
-  return { address, network, wallet: provider, walletType, capabilities };
+  return { address: accounts[0], network, wallet: provider, capabilities };
 }
 
 export async function proveWalletOwnership(session: WalletSession, lockerId: string) {
@@ -89,16 +82,7 @@ export async function proveWalletOwnership(session: WalletSession, lockerId: str
 
 export async function disconnectTari(session?: WalletSession) {
   const provider = session?.wallet ?? window.tari;
-  try {
-    await provider?.request({ method: "tari_disconnect" });
-  } catch {
-    // Some wallet transports only support disconnect through the picker.
-  }
-  try {
-    await window.TariConnect?.disconnect?.();
-  } catch {
-    // Local app state is still cleared by the caller.
-  }
+  if (provider) await provider.request({ method: "tari_disconnect" }).catch(() => null);
 }
 
 export function shortAddress(address: string) {

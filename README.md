@@ -38,6 +38,10 @@ Contari is not yet safe for sensitive content.
 
 Do not use the preview for valuable, regulated, or highly confidential information.
 
+## Development checks
+
+Run `npm run build` for the production frontend build and `npm run test:e2e` for browser-level tests. GitHub Actions also builds the Ootle contract WASM and stores it as a downloadable artifact. See [the launch checklist](docs/launch-checklist.md) for the testnet-first publishing and mainnet handoff.
+
 ## Supabase
 
 The connected Supabase project uses `contari_lockers` for encrypted locker records. Email authentication is not used by the current app. The wallet-first migration is:

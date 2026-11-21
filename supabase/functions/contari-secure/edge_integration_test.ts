@@ -89,7 +89,7 @@ Deno.test("deployed secure service wraps keys and releases only to signed allowl
   const creator = makeWallet();
   const recipient = makeWallet();
   const outsider = makeWallet();
-  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 24);
   const rawKey = crypto.getRandomValues(new Uint8Array(32));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cryptoKey = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt"]);
@@ -140,7 +140,7 @@ Deno.test("deployed secure service wraps keys and releases only to signed allowl
 Deno.test("a locker configured for Ootle cannot release its key without a claim transaction", async () => {
   const creator = makeWallet();
   const recipient = makeWallet();
-  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 24);
   const rawKey = crypto.getRandomValues(new Uint8Array(32));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cryptoKey = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt"]);
@@ -172,7 +172,7 @@ Deno.test("a locker configured for Ootle cannot release its key without a claim 
 
 Deno.test("mainnet creation fails closed until a Contari Ootle component is configured", async () => {
   const creator = makeWallet("mainnet");
-  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 24);
   const rawKey = crypto.getRandomValues(new Uint8Array(32));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cryptoKey = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt"]);

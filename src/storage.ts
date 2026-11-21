@@ -91,7 +91,9 @@ export function getLocker(id: string) {
 export async function loadLocker(id: string): Promise<Locker | undefined> {
   const data = await invokeSecure({ action: "read", lockerId: id });
   if (!data?.locker) return getLocker(id);
-  const locker = toLocker(data.locker as LockerRow);
+  const row = data.locker as LockerRow;
+  const locker = toLocker(row);
+  if (!Array.isArray(row.allowed_wallets)) locker.allowedWallets = getLocker(id)?.allowedWallets || [];
   saveLocker(locker);
   return locker;
 }

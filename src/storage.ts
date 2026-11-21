@@ -151,7 +151,7 @@ async function requestWalletChallenge(lockerId: string, purpose: "create" | "unl
   if (!data?.id || !data?.challenge) throw new Error("The secure service returned an invalid wallet challenge.");
   return data as { id: string; challenge: string; expires_at: string };
 }
-export async function unlockSecureLocker(lockerId: string, session: import("./tari").WalletSession) {
+export async function unlockSecureLocker(lockerId: string, session: WalletSession, transactionId?: string) {
   const challenge = await requestWalletChallenge(lockerId, "unlock", session);
   const proof = await signTariChallenge(session, challenge.challenge);
   const { data, error } = await supabase.functions.invoke("contari-secure", {

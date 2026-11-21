@@ -121,6 +121,7 @@ Deno.test("deployed secure service wraps keys and releases only to signed allowl
   const publicRead = await call({ action: "read", lockerId: id });
   assertEquals(publicRead.status, 200, JSON.stringify(publicRead.data));
   assertEquals("allowed_wallets" in (publicRead.data.locker || {}), false);
+  assertEquals("key" in (publicRead.data.locker || {}), false);
 
   const listChallenge = await challenge(creator, "workspace", "list");
   const listProof = signChallenge(creator.secret, creator.address, listChallenge.challenge);

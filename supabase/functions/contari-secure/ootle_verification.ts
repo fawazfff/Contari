@@ -25,6 +25,15 @@ function templateAddress(value: unknown) {
   if (typeof unwrapped === "string") return unwrapped.toLowerCase().replace(/^template_/, "").replace(/^0x/, "");
   return "";
 }
+function componentAddressFromSubstate(value: unknown) {
+  const substate = unwrapTagged(value);
+  if (Array.isArray(substate) && substate[0] === 0) {
+    const address = unwrapTagged(substate[1]);
+    if (address instanceof Uint8Array) return "component_" + bytesHex(address);
+    if (typeof address === "string") return address.toLowerCase();
+  }
+  return "";
+}
 export function isCommittedTransactionResult(response: unknown) {
   if (!response || typeof response !== "object") return false;
   const result = (response as Record<string, unknown>).result ?? response;
@@ -52,7 +61,8 @@ export function decodeLockerClaimEvent(encodedBase64: string) {
     topic: typeof decoded[2] === "string" ? decoded[2] : "",
     lockerIdHash: field(decoded[3], "locker_id_hash"),
     claimantKey: field(decoded[3], "claimant_key"),
-    componentAddress: field(decoded[3], "component_address"),
+    componentAddress: componentAddressFromSubstate(decoded[0]),
+    payloadComponentAddress: field(decoded[3], "component_address"),
   };
 }
 
@@ -68,6 +78,8 @@ export function matchesLockerClaimEvent(
     event.templateAddress === expectedTemplateAddress.toLowerCase().replace(/^template_/, "").replace(/^0x/, "") &&
     typeof event.componentAddress === "string" &&
     event.componentAddress.toLowerCase() === expectedComponentAddress.toLowerCase() &&
+    typeof event.payloadComponentAddress === "string" &&
+    event.payloadComponentAddress.toLowerCase() === expectedComponentAddress.toLowerCase() &&
     typeof event.lockerIdHash === "string" &&
     event.lockerIdHash.toLowerCase() === expectedLockerHash.toLowerCase() &&
     typeof event.claimantKey === "string" &&

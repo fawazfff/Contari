@@ -6,11 +6,12 @@ let secureKey = "";
 
 async function installWallet(page: Page, address = walletAddress) {
   await page.addInitScript((account) => {
+    (window as any).__testAccount = account;
     (window as any).__walletCalls = [];
     (window as any).tari = {
       request: async ({ method, params }: { method: string; params?: Record<string, unknown> }) => {
         (window as any).__walletCalls.push(method);
-        if (method === "tari_requestAccounts") return [account];
+        if (method === "tari_requestAccounts") return [(window as any).__testAccount || account];
         if (method === "tari_getNetwork") return "esmeralda";
         if (method === "tari_getCapabilities") return { walletOwnershipProof: true, transactionResultLookup: false };
         if (method === "tari_signWalletOwnershipChallenge") return { walletAddress: account, signature: "test-signature", publicNonce: "test-nonce", challenge: params?.challenge };
@@ -32,7 +33,13 @@ async function mockSecureFunction(page: Page) {
       lockerRow = { id: body.id, title: body.title, description: body.description, ciphertext: body.ciphertext, iv: body.iv, gate: body.gate, allowed_wallets: body.allowedWallets, creator_wallet: body.walletAddress, creator_network: body.network, key_version: 2, created_at: new Date().toISOString() };
       await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ id: body.id, created: true }) });
     } else if (body.action === "unlock") {
-      await route.fulfill({ status: secureKey ? 200 : 404, contentType: "application/json", body: JSON.stringify(secureKey ? { key: secureKey } : { error: "missing key" }) });
+      const isCreator = lockerRow && String(lockerRow.creator_wallet).toLowerCase() === String(body.walletAddress).toLowerCase();
+      const isAllowed = lockerRow && (lockerRow.gate === "wallet" || (Array.isArray(lockerRow.allowed_wallets) && lockerRow.allowed_wallets.some((a: string) => a.toLowerCase() === String(body.walletAddress).toLowerCase())));
+      if (!isCreator && !isAllowed) {
+        await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "This Tari wallet is not allowed to open this locker." }) });
+      } else {
+        await route.fulfill({ status: secureKey ? 200 : 404, contentType: "application/json", body: JSON.stringify(secureKey ? { key: secureKey } : { error: "missing key" }) });
+      }
     } else {
       await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "unknown action" }) });
     }
@@ -49,7 +56,8 @@ async function mockSupabase(page: Page) {
       return;
     }
     if (request.method() === "GET") {
-      const id = new URL(request.url()).searchParams.get("id");
+      const idFilter = new URL(request.url()).searchParams.get("id");
+      const id = idFilter?.replace(/^eq\./, "");
       if (id && lockerRow && lockerRow.id === id) {
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
           ...lockerRow,
@@ -186,4 +194,27 @@ test("configured Ootle unlock stops before submitting when result lookup is unsu
   await expect(page.getByText(/no claim was submitted/i)).toBeVisible();
   const submitted = await page.evaluate(() => (window as any).__walletCalls.includes("tari_signAndSubmitTransaction"));
   expect(submitted).toBe(false);
+});
+
+test("server denies an allowlist bypass even if browser storage is tampered with", async ({ page }) => {
+  const recipient = "otl_esm_" + "1".repeat(64);
+  const attacker = "otl_esm_" + "2".repeat(64);
+  await installWallet(page);
+  await page.goto("/app/create");
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
+  await page.getByLabel("Locker title").fill("Private team note");
+  await page.getByLabel("Your content").fill("Only the selected wallet can read this.");
+  await page.getByRole("button", { name: /selected wallets/i }).click();
+  await page.getByLabel("Allowed wallet addresses").fill(recipient);
+  await page.getByRole("button", { name: /encrypt & create locker/i }).click();
+  await expect(page).toHaveURL(/\/l\//);
+  await page.evaluate((value) => {
+    const rows = JSON.parse(localStorage.getItem("contari_lockers_v1") || "[]");
+    rows[0].allowedWallets = [value];
+    localStorage.setItem("contari_lockers_v1", JSON.stringify(rows));
+    (window as any).__testAccount = value;
+  }, attacker);
+  await page.reload();
+  await page.getByRole("button", { name: /connect & unlock/i }).click();
+  await expect(page.getByText(/not allowed to open this locker/i)).toBeVisible();
 });

@@ -6,6 +6,8 @@ This is the handoff for the remaining Tari deployment work. The application and 
 
 - Frontend build: `npm run build`.
 - Contract WASM build: `cargo build --manifest-path contracts/contari/Cargo.toml --target wasm32-unknown-unknown --release`.
+- Local Ootle engine tests: `cargo test --manifest-path contracts/contari/Cargo.toml` using Tari's matching `tari_template_test_tooling 0.49.2` / `tari_template_lib 0.37.0` pair.
+- The template is packaged as a WASM-only `cdylib` to preserve release LTO and minimize publish size.
 - CI uploads the compiled contract as the `contari-ootle-template-wasm` artifact.
 - Settings accepts a component address after the registry has been instantiated.
 - Browser tests cover landing navigation, workspace routes, wallet connect/disconnect, form validation, locker creation, preview unlock, allowlist rejection, settings validation, and link copying.
@@ -43,6 +45,7 @@ npm run test:e2e
 deno test --allow-net supabase/functions/contari-secure/crypto_test.ts supabase/functions/contari-secure/ootle_verification_test.ts
 # CI also runs edge_integration_test.ts against the configured Supabase project
 cargo build --manifest-path contracts/contari/Cargo.toml --target wasm32-unknown-unknown --release
+cargo test --manifest-path contracts/contari/Cargo.toml
 ```
 
-GitHub Actions runs the frontend build, Playwright browser tests, Deno cryptographic proof tests, a live integration test against the deployed secure-key Edge Function, and the contract WASM build on pushes and pull requests to `main`.
+GitHub Actions runs the frontend build, Playwright browser tests, Deno cryptographic proof tests, the contract WASM build, and the contract's in-process Ootle engine tests on pushes and pull requests to `main`.

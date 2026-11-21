@@ -131,3 +131,22 @@ test("copy-link action reports success when clipboard is available", async ({ pa
   await page.getByRole("button", { name: /copy complete link/i }).click();
   await expect(page.getByText("Link copied")).toBeVisible();
 });
+
+test("workspace sidebar links open overview, library, and settings", async ({ page }) => {
+  await page.goto("/app");
+  await page.getByRole("link", { name: /my lockers/i }).click();
+  await expect(page.getByRole("heading", { name: /my lockers/i })).toBeVisible();
+  await page.getByRole("link", { name: /wallet & network/i }).click();
+  await expect(page.getByRole("heading", { name: /wallet & network/i })).toBeVisible();
+  await page.getByRole("link", { name: /overview/i }).click();
+  await expect(page.getByRole("heading", { name: /your lockers/i })).toBeVisible();
+});
+
+test("mobile sidebar opens and closes after navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/app");
+  await page.getByRole("button", { name: /open navigation menu/i }).click();
+  await expect(page.getByRole("link", { name: /my lockers/i })).toBeVisible();
+  await page.getByRole("link", { name: /my lockers/i }).click();
+  await expect(page.getByRole("heading", { name: /my lockers/i })).toBeVisible();
+});

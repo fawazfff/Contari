@@ -115,53 +115,33 @@ export async function loadMyLockers(walletAddress: string): Promise<Locker[]> {
   return lockers;
 }
 
-async function edgeFunctionError(error: unknown, fallback: string) {
-  const candidate = error as { message?: string; context?: Response };
-  if (candidate?.context && typeof candidate.context.clone === "function") {
-    try {
-      const payload = await candidate.context.clone().json() as { error?: unknown };
-      if (typeof payload?.error === "string" && payload.error.trim()) return payload.error;
-    } catch {
-      // The response may not contain JSON. Use the SDK error message instead.
-    }
-  }
-  return candidate?.message || fallback;
-}
-
 export async function createSecureLocker(locker: Locker, key: string, session: WalletSession, componentAddress?: string) {
   const challenge = await requestWalletChallenge(locker.id, "create", session);
   const proof = await signTariChallenge(session, challenge.challenge);
-  const { data, error } = await supabase.functions.invoke("contari-secure", {
-    body: {
-      action: "create", challengeId: challenge.id, walletAddress: session.address,
-      network: session.network, signature: proof.signature, publicNonce: proof.publicNonce,
-      id: locker.id, title: locker.title, description: locker.description,
-      ciphertext: locker.ciphertext, iv: locker.iv, gate: locker.gate,
-      allowedWallets: locker.allowedWallets, key, componentAddress: componentAddress || null,
-    },
+  await invokeSecure({
+    action: "create", challengeId: challenge.id, walletAddress: session.address,
+    network: session.network, signature: proof.signature, publicNonce: proof.publicNonce,
+    id: locker.id, title: locker.title, description: locker.description,
+    ciphertext: locker.ciphertext, iv: locker.iv, gate: locker.gate,
+    allowedWallets: locker.allowedWallets, key, componentAddress: componentAddress || null,
   });
-  if (error) throw new Error(data?.error || await edgeFunctionError(error, "Secure locker creation failed."));
   saveLocker({ ...locker, creatorNetwork: session.network, keyVersion: 2, ootleComponentAddress: componentAddress || undefined });
 }
 async function requestWalletChallenge(lockerId: string, purpose: "create" | "unlock", session: WalletSession) {
-  const { data, error } = await supabase.functions.invoke("contari-secure", {
-    body: { action: "challenge", lockerId, purpose, walletAddress: session.address, network: session.network },
+  const data = await invokeSecure({
+    action: "challenge", lockerId, purpose, walletAddress: session.address, network: session.network,
   });
-  if (error) throw new Error(data?.error || await edgeFunctionError(error, "Could not request a secure wallet challenge."));
   if (!data?.id || !data?.challenge) throw new Error("The secure service returned an invalid wallet challenge.");
   return data as { id: string; challenge: string; expires_at: string };
 }
 export async function unlockSecureLocker(lockerId: string, session: WalletSession, transactionId?: string) {
   const challenge = await requestWalletChallenge(lockerId, "unlock", session);
   const proof = await signTariChallenge(session, challenge.challenge);
-  const { data, error } = await supabase.functions.invoke("contari-secure", {
-    body: {
-      action: "unlock", challengeId: challenge.id, lockerId,
-      walletAddress: session.address, network: session.network, transactionId: transactionId || null,
-      signature: proof.signature, publicNonce: proof.publicNonce,
-    },
+  const data = await invokeSecure({
+    action: "unlock", challengeId: challenge.id, lockerId,
+    walletAddress: session.address, network: session.network, transactionId: transactionId || null,
+    signature: proof.signature, publicNonce: proof.publicNonce,
   });
-  if (error) throw new Error(data?.error || await edgeFunctionError(error, "The server did not release the locker key."));
   if (typeof data?.key !== "string" || !data.key) throw new Error("The server did not release the locker key.");
   return data.key as string;
 }

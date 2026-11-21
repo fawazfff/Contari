@@ -67,7 +67,7 @@ The contract uses the authenticated Ootle transaction signer, not a caller-suppl
 3. Save the real mainnet component address in Contari Settings.
 4. Connect a Tari Ootle mainnet wallet and test registration and claims.
 5. Verify committed transaction results and failure cases.
-6. Add server-side Ootle indexer verification of the committed `LockerClaimed` event before releasing a key when contract mode is enabled.
+6. Configure the published template address in Supabase Edge Function secrets and verify the committed `LockerClaimed` event against both public indexers before releasing a key.
 7. Consider recipient-specific public-key wrapping if the product needs an operator-blind, end-to-end encryption model.
 8. Test the complete flow on mobile and desktop before public launch.
 

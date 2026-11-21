@@ -116,6 +116,7 @@ function CreateLocker({ wallet, onConnect }: { wallet: WalletSession | null; onC
       const id = crypto.randomUUID().replaceAll("-","").slice(0,12);
       const componentAddress = getConfiguredOotleComponent().trim();
       if (componentAddress && !isValidOotleComponentAddress(componentAddress)) throw new Error("The saved Ootle registry address is invalid. Update it in Wallet & network settings.");
+      if (["mainnet", "tari-mainnet"].includes(wallet.network.trim().toLowerCase()) && !componentAddress) throw new Error("Mainnet lockers require a deployed Contari Ootle component. Add it in Wallet & network settings first.");
       const locker: Locker = { id, title: title.trim(), description: description.trim(), ciphertext: encrypted.ciphertext, iv: encrypted.iv, createdAt: new Date().toISOString(), creator: wallet.address, creatorNetwork: wallet.network, keyVersion: 2, ootleComponentAddress: componentAddress || undefined, gate, allowedWallets, claims: [] };
       if (componentAddress) {
         if (!wallet.capabilities?.transactionResultLookup) throw new Error("This Tari wallet cannot confirm Ootle transactions. Locker creation is paused.");

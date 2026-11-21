@@ -69,3 +69,12 @@
   .side-nav a,.help-link { min-height:44px; }
   .form-card input,.form-card textarea,.settings-card input { font-size:16px; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after {
+    scroll-behavior:auto !important;
+    animation-duration:0.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:0.01ms !important;
+  }
+}

@@ -88,7 +88,8 @@ mod contari {
             assert!(self.networks[index] == network, "wallet network does not match locker network");
 
             if self.gates[index] == ALLOWLIST_GATE {
-                assert!(self.allowed_wallets[index].contains(&signer), "wallet is not on the locker allowlist");
+                let is_creator = self.creators[index] == signer;
+                assert!(is_creator || self.allowed_wallets[index].contains(&signer), "wallet is not on the locker allowlist");
             }
             // A wallet may open the same shared locker again later. Keep the
             // registry's unique-claim counter idempotent instead of rejecting

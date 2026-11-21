@@ -6,7 +6,7 @@ let secureKey = "";
 
 async function installWallet(page: Page, address = walletAddress) {
   await page.addInitScript((account) => {
-    (window as any).__testAccount = account;
+    (window as any).__testAccount = localStorage.getItem("testWallet") || account;
     (window as any).__walletCalls = [];
     (window as any).tari = {
       request: async ({ method, params }: { method: string; params?: Record<string, unknown> }) => {
@@ -14,7 +14,7 @@ async function installWallet(page: Page, address = walletAddress) {
         if (method === "tari_requestAccounts") return [(window as any).__testAccount || account];
         if (method === "tari_getNetwork") return "esmeralda";
         if (method === "tari_getCapabilities") return { walletOwnershipProof: true, transactionResultLookup: false };
-        if (method === "tari_signWalletOwnershipChallenge") return { walletAddress: account, signature: "test-signature", publicNonce: "test-nonce", challenge: params?.challenge };
+        if (method === "tari_signWalletOwnershipChallenge") return { walletAddress: (window as any).__testAccount, signature: "test-signature", publicNonce: "test-nonce", challenge: params?.challenge };
         if (method === "tari_disconnect") return null;
         throw new Error("Unexpected wallet method: " + method);
       },
@@ -212,6 +212,7 @@ test("server denies an allowlist bypass even if browser storage is tampered with
     const rows = JSON.parse(localStorage.getItem("contari_lockers_v1") || "[]");
     rows[0].allowedWallets = [value];
     localStorage.setItem("contari_lockers_v1", JSON.stringify(rows));
+    localStorage.setItem("testWallet", value);
     (window as any).__testAccount = value;
   }, attacker);
   await page.reload();

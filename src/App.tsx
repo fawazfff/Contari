@@ -113,7 +113,7 @@ function CreateLocker({ wallet, onConnect }: { wallet: WalletSession | null; onC
     try {
       if (!wallet) throw new Error("Connect your Tari wallet before creating a locker.");
       const encrypted = await encryptContent(content);
-      const id = crypto.randomUUID().replaceAll("-","").slice(0,12);
+      const id = crypto.randomUUID().replaceAll("-","").slice(0,24);
       const componentAddress = getConfiguredOotleComponent().trim();
       if (componentAddress && !isValidOotleComponentAddress(componentAddress)) throw new Error("The saved Ootle registry address is invalid. Update it in Wallet & network settings.");
       if (["mainnet", "tari-mainnet"].includes(wallet.network.trim().toLowerCase()) && !componentAddress) throw new Error("Mainnet lockers require a deployed Contari Ootle component. Add it in Wallet & network settings first.");

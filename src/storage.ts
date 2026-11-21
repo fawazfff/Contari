@@ -98,6 +98,19 @@ export async function loadMyLockers(walletAddress: string): Promise<Locker[]> {
   return lockers;
 }
 
+async function edgeFunctionError(error: unknown, fallback: string) {
+  const candidate = error as { message?: string; context?: Response };
+  if (candidate?.context && typeof candidate.context.clone === "function") {
+    try {
+      const payload = await candidate.context.clone().json() as { error?: unknown };
+      if (typeof payload?.error === "string" && payload.error.trim()) return payload.error;
+    } catch {
+      // The response may not contain JSON. Use the SDK error message instead.
+    }
+  }
+  return candidate?.message || fallback;
+}
+
 export async function createSecureLocker(locker: Locker, key: string, session: WalletSession) {
   const challenge = await requestWalletChallenge(locker.id, "create", session);
   const proof = await signTariChallenge(session, challenge.challenge);

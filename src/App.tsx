@@ -72,7 +72,7 @@ function Dashboard({ wallet, onConnect }: { wallet: WalletSession | null; onConn
   const [loadError, setLoadError] = useState("");
   useEffect(() => {
     if (!wallet) { setLockers([]); return; }
-    loadMyLockers(wallet.address).then(rows => { setLoadError(""); setLockers(rows); })
+    loadMyLockers(wallet).then(rows => { setLoadError(""); setLockers(rows); })
       .catch(error => setLoadError(error instanceof Error ? error.message : "Could not load lockers."));
   }, [wallet?.address]);
   const selected = lockers.filter(item => item.gate === "allowlist").length;

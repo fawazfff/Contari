@@ -56,7 +56,7 @@ function normalizeTemplateAddress(value: unknown) {
 async function indexerJson(base: string, path: string) {
   const response = await fetch(base + path, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(7000),
+    signal: AbortSignal.timeout(4000),
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error("Tari indexer returned HTTP " + response.status + ".");
@@ -71,9 +71,10 @@ async function indexerHasClaimEvent(
   expectedClaimant: string,
 ) {
   let beforeId: string | undefined;
-  for (let page = 0; page < 25; page++) {
+  for (let page = 0; page < 5; page++) {
     const query = new URLSearchParams({
       topic: "ContariRegistry.LockerClaimed",
+      substate_id: componentAddress,
       limit: "100",
       offset: "0",
     });
@@ -132,7 +133,7 @@ async function verifyOotleClaim(
   for (const base of bases.slice(0, 2)) {
     let committed = false;
     let lastError: unknown;
-    for (let attempt = 0; attempt < 10 && !committed; attempt++) {
+    for (let attempt = 0; attempt < 5 && !committed; attempt++) {
       try {
         const response = await indexerJson(base, "/transactions/" + txId + "/result");
         const result = response?.result ?? response;
@@ -148,7 +149,7 @@ async function verifyOotleClaim(
         if (error instanceof Error && /did not commit|rejected the claim/.test(error.message)) throw error;
         lastError = error;
       }
-      if (!committed && attempt < 9) await new Promise((resolve) => setTimeout(resolve, 500));
+      if (!committed && attempt < 4) await new Promise((resolve) => setTimeout(resolve, 500));
     }
     if (!committed) {
       throw new Error(lastError instanceof Error
@@ -156,7 +157,7 @@ async function verifyOotleClaim(
         : "The Ootle claim is not finalized on both public indexers yet. The locker key remains locked.");
     }
     let eventFound = false;
-    for (let attempt = 0; attempt < 10 && !eventFound; attempt++) {
+    for (let attempt = 0; attempt < 5 && !eventFound; attempt++) {
       try {
         eventFound = await indexerHasClaimEvent(
           base, txId, componentAddress, expectedTemplate, expectedLockerHash, expectedClaimant,
@@ -164,7 +165,7 @@ async function verifyOotleClaim(
       } catch (error) {
         lastError = error;
       }
-      if (!eventFound && attempt < 9) await new Promise((resolve) => setTimeout(resolve, 500));
+      if (!eventFound && attempt < 4) await new Promise((resolve) => setTimeout(resolve, 500));
     }
     if (!eventFound) {
       throw new Error(lastError instanceof Error

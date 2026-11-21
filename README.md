@@ -41,13 +41,13 @@ Important limits:
 
 ## Development checks
 
-Run `npm run build` for the production frontend build and `npm run test:e2e` for browser-level tests. GitHub Actions also builds the Ootle contract WASM and stores it as a downloadable artifact. See [the launch checklist](docs/launch-checklist.md) for the testnet-first publishing and mainnet handoff.
+Run `npm run build` for the production frontend build and `npm run test:e2e` for browser-level tests. GitHub Actions also runs Deno tests for Tari Ristretto signature verification and an integration test against the deployed Supabase secure-key function. The integration test creates a synthetic test locker, verifies an unauthorized wallet is denied, confirms the recipient can recover the key, and leaves only encrypted test data behind. CI also builds the Ootle contract WASM and stores it as a downloadable artifact. See [the launch checklist](docs/launch-checklist.md) for the testnet-first publishing and mainnet handoff.
 
 ## Supabase
 
-The connected Supabase project uses `contari_lockers` for encrypted locker records. Email authentication is not used by the current app. The wallet-first migration is:
+The connected Supabase project uses `contari_lockers` for encrypted locker records. The `contari-secure` Edge Function verifies Tari wallet ownership proofs, creates one-time challenges, checks allowlists, and wraps/releases AES keys. `contari_key_vault` and `contari_auth_challenges` are service-role-only. Email authentication is not used by the current app. The wallet-first migration is:
 
-`supabase/migrations/20261121070000_wallet_first_storage.sql`
+`supabase/migrations/20261121070000_wallet_first_storage.sql` plus the secure key delivery migrations `20261121060429`, `20261121060446`, and `20261121060543`.
 
 The public locker-read policy exposes ciphertext and metadata, not plaintext. The app encrypts content before it is stored.
 

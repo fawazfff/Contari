@@ -4,7 +4,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Check, CheckCircle2, Ch
 import { connectTari, disconnectTari, proveWalletOwnership, shortAddress, type WalletSession } from "./tari";
 import { decryptContent, encryptContent, getLocker, loadLocker, loadMyLockers, createRemoteLocker, readLockers, saveLocker, type Locker } from "./storage";
 
-import { registerLockerOnOotle, claimLockerOnOotle, getConfiguredOotleComponent, isValidOotleComponentAddress } from "./ootle";
+import { registerLockerOnOotle, claimLockerOnOotle, getOotleTransactionResult, getConfiguredOotleComponent, isValidOotleComponentAddress } from "./ootle";
 
 function Brand({ light = false }: { light?: boolean }) {
   return <Link to="/" className={"brand" + (light ? " brand-light" : "")}><span className="brand-mark"><LockKeyhole size={17}/></span><span>contari<span className="brand-period">.</span></span></Link>;
@@ -150,13 +150,14 @@ function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onCon
       let proof: unknown;
       if (componentAddress) {
         const chain = await claimLockerOnOotle(activeWallet.wallet, componentAddress, locker.id, activeWallet.network, activeWallet.address);
-        proof = { type: "ootle-transaction", transactionId: chain.transactionId, response: chain.response };
+        if (!activeWallet.capabilities?.transactionResultLookup) throw new Error("This Tari wallet cannot look up transaction results. Content remains locked until confirmation can be checked.");
+        const finalResult = await getOotleTransactionResult(activeWallet.wallet, chain.transactionId);
+        proof = { type: "ootle-transaction", transactionId: chain.transactionId, response: finalResult };
       } else {
         proof = await proveWalletOwnership(activeWallet, locker.id);
       }
-      if (componentAddress) throw new Error("Ootle transaction submitted. Contari cannot confirm final on-chain execution yet, so the content remains locked.");
       const plain = await decryptContent(locker.ciphertext, locker.iv, key);
-      setMessage(componentAddress ? "Ootle claim submitted: " + (proof as { transactionId: string }).transactionId : "Wallet challenge received. This preview is not a verified mainnet unlock.");
+      setMessage(componentAddress ? "Ootle claim committed: " + (proof as { transactionId: string }).transactionId : "Wallet challenge received. This preview is not a verified mainnet unlock.");
       setContent(plain);
       setStatus("open");
     } catch (e) { setMessage(e instanceof Error ? e.message : "Could not unlock this content."); setStatus("error"); }

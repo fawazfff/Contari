@@ -34,10 +34,11 @@ The key-vault and challenge tables deny access to `anon` and `authenticated`; on
 
 Important limits:
 1. **Old lockers are not retroactively secured.** Their old URLs still contain their original decryption keys. They are marked as legacy and the app refuses to unlock them through the new flow. Recreate those lockers and stop sharing their old links.
-2. **The secure preview enforces wallet signatures and access rules server-side.** The Ootle registry has not been published or instantiated, and server-side verification of an on-chain transaction is still a separate mainnet integration task. Do not claim on-chain enforcement is active yet.
+2. **The secure preview enforces wallet signatures and access rules server-side.** The Ootle registry has not been published or instantiated. The normal browser flow can submit a claim when a component is configured, but the secure key-release endpoint does not yet independently verify that claim against an Ootle indexer. Do not treat the contract as a production access gate until that server-side verification is implemented.
 3. **The master key is server-held, not end-to-end recipient encryption.** The service operator can decrypt vault-wrapped keys. For a zero-knowledge operator model, replace this with recipient-specific public-key wrapping or a recipient key agreement supported by Tari.
 4. **The wallet proof implementation must be verified against a real supported Tari wallet and negative test vectors before production.** Automated UI tests mock the wallet and Edge Function; they do not constitute a cryptographic interoperability audit.
 5. **Mainnet has not been tested with a funded Tari wallet.** Wallet prompts, contract calls, fees, and finality still require a live test.
+6. **Tari wallet connection depends on the official Tari Universe integration.** The connector injects `window.tari` inside the supported Tari environment. Opening the Vercel URL in ordinary Safari/Chrome or a social-app browser does not automatically provide a Tari wallet.
 
 ## Development checks
 
@@ -68,6 +69,6 @@ The contract uses the authenticated Ootle transaction signer, not a caller-suppl
 3. Save the real mainnet component address in Contari Settings.
 4. Connect a Tari Ootle mainnet wallet and test registration and claims.
 5. Verify committed transaction results and failure cases.
-6. Replace the URL-fragment key with a secure key-release mechanism.
-7. Add independent wallet challenge verification for app sessions and cloud identity.
+6. Add server-side Ootle indexer verification of the committed `LockerClaimed` event before releasing a key when contract mode is enabled.
+7. Consider recipient-specific public-key wrapping if the product needs an operator-blind, end-to-end encryption model.
 8. Test the complete flow on mobile and desktop before public launch.

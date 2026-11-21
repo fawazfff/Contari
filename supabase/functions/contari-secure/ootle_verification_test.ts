@@ -23,6 +23,7 @@ function makeEvent(options: {
   const metadata = encode(new Map([
     ["locker_id_hash", lockerHash],
     ["claimant_key", claimant],
+    ["component_address", component],
   ]));
   // SubstateId::Component is variant 0 wrapping tagged ComponentAddress (tag 128).
   const substate = new Uint8Array([0x82, 0x00, 0xd8, 0x80, ...encodedComponent]);
@@ -46,6 +47,7 @@ Deno.test("decodes Tari BOR tagged template and metadata payload", () => {
   assertEquals(event.lockerIdHash, fixture.lockerHash);
   assertEquals(event.claimantKey, fixture.claimant);
   assertEquals(event.componentAddress, fixture.component);
+  assertEquals(event.payloadComponentAddress, fixture.component);
   assertEquals(matchesLockerClaimEvent(
     fixture.encoded, fixture.template, fixture.component, fixture.lockerHash, fixture.claimant,
   ), true);

@@ -172,7 +172,7 @@ Deno.test("Ootle component creation fails closed until trusted indexers and temp
     walletAddress: creator.address, network, ...createProof,
     id, title: "Ootle-gated CI test", description: "Must require verifier config",
     ciphertext: b64url(ciphertext), iv: b64url(iv),
-    gate: "allowlist", allowedWallets: [],
+    gate: "wallet", allowedWallets: [],
     key: b64url(rawKey), componentAddress: "component_" + "a".repeat(64),
   });
   assertEquals(denied.status, 400, JSON.stringify(denied.data));

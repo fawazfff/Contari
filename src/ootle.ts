@@ -8,6 +8,8 @@ const NETWORK_BYTES: Record<string, number> = {
   local: 16,
   igor: 36,
   esmeralda: 38,
+  esme: 38,
+  "tari-mainnet": 0,
 };
 
 function hex(bytes: Uint8Array) {
@@ -140,5 +142,5 @@ export function isValidOotleComponentAddress(value: string) {
 }
 
 export function getConfiguredOotleComponent() {
-  return localStorage.getItem("contari_component") || "";
+  return (localStorage.getItem("contari_component") || "").trim().toLowerCase();
 }

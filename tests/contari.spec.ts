@@ -5,8 +5,10 @@ let lockerRow: Record<string, unknown> | null = null;
 
 async function installWallet(page: Page, address = walletAddress) {
   await page.addInitScript((account) => {
+    (window as any).__walletCalls = [];
     (window as any).tari = {
       request: async ({ method, params }: { method: string; params?: Record<string, unknown> }) => {
+        (window as any).__walletCalls.push(method);
         if (method === "tari_requestAccounts") return [account];
         if (method === "tari_getNetwork") return "esmeralda";
         if (method === "tari_getCapabilities") return { walletOwnershipProof: true, transactionResultLookup: false };
@@ -149,4 +151,19 @@ test("mobile sidebar opens and closes after navigation", async ({ page }) => {
   await expect(page.getByRole("link", { name: /my lockers/i })).toBeVisible();
   await page.getByRole("link", { name: /my lockers/i }).click();
   await expect(page.getByRole("heading", { name: /my lockers/i })).toBeVisible();
+});
+
+test("configured Ootle unlock stops before submitting when result lookup is unsupported", async ({ page }) => {
+  await installWallet(page);
+  await page.goto("/app/create");
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
+  await page.getByLabel("Locker title").fill("Finality guard");
+  await page.getByLabel("Your content").fill("Do not open without a verified claim");
+  await page.getByRole("button", { name: /encrypt & create locker/i }).click();
+  await expect(page).toHaveURL(/\/l\//);
+  await page.evaluate(() => localStorage.setItem("contari_component", "component_" + "a".repeat(64)));
+  await page.getByRole("button", { name: /connect & unlock/i }).click();
+  await expect(page.getByText(/no claim was submitted/i)).toBeVisible();
+  const submitted = await page.evaluate(() => (window as any).__walletCalls.includes("tari_signAndSubmitTransaction"));
+  expect(submitted).toBe(false);
 });

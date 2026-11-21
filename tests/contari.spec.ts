@@ -98,7 +98,7 @@ test("landing navigation and main routes render", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /from private note/i })).toBeVisible();
   await page.getByRole("link", { name: /try the demo/i }).click();
   await expect(page.getByRole("heading", { name: /create a locker/i })).toBeVisible();
-  await page.getByRole("link", { name: "Workspace", exact: true }).click();
+  await page.getByRole("link", { name: /back to workspace/i }).click();
   await expect(page.getByRole("heading", { name: /your lockers/i })).toBeVisible();
 });
 

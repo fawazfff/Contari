@@ -22,7 +22,7 @@ export type WalletSession = {
 };
 
 function waitForTariProvider(timeoutMs = 1800): Promise<TariWallet | undefined> {
-  if (window.tari?.isTariWallet) return Promise.resolve(window.tari);
+  if (window.tari && typeof window.tari.request === "function") return Promise.resolve(window.tari);
   return new Promise((resolve) => {
     let settled = false;
     const finish = (provider?: TariWallet) => {
@@ -42,7 +42,7 @@ export async function connectTari(): Promise<WalletSession> {
   const provider = await waitForTariProvider();
   if (!provider || typeof provider.request !== "function") {
     throw new Error(
-      "Tari wallet unavailable: this page is not running inside Tari Universe. Open Tari Universe first, then open Contari from its browser or dApp area. A normal Safari, Chrome, or social-app browser tab does not inject the Tari wallet provider. If you already opened Contari inside Tari Universe, close and reopen the page, then try connecting again."
+      "No Tari wallet provider was detected. Open Contari inside the Tari Web Wallet's dApp view, or use a browser with the Sapient Tari wallet extension installed. A regular mobile browser tab cannot connect by itself."
     );
   }
 

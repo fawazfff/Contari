@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Check, CheckCircle2, ChevronRight, CircleHelp, Copy, FileLock2, FilePlus2, Fingerprint, FolderOpen, KeyRound, LockKeyhole, Menu, MoreHorizontal, ShieldCheck, Sparkles, Wallet, X, Zap } from "lucide-react";
 import { connectTari, disconnectTari, proveWalletOwnership, shortAddress, type WalletSession } from "./tari";
-import { decryptContent, encryptContent, getLocker, loadLocker, loadMyLockers, createRemoteLocker, recordRemoteClaim, readLockers, saveLocker, type Locker } from "./storage";
+import { decryptContent, encryptContent, getLocker, loadLocker, loadMyLockers, createRemoteLocker, readLockers, saveLocker, type Locker } from "./storage";
 
 import { registerLockerOnOotle, claimLockerOnOotle, getConfiguredOotleComponent, isValidOotleComponentAddress } from "./ootle";
 
@@ -118,24 +118,11 @@ function CreateLocker({ wallet }: { wallet: WalletSession | null }) {
       const componentAddress = getConfiguredOotleComponent();
       if (componentAddress) await registerLockerOnOotle(wallet.wallet, componentAddress, id, wallet.network, gate, allowedWallets);
       await createRemoteLocker(locker);
-      const componentAddress = getConfiguredOotleComponent();
-      if (componentAddress) {
-        if (!wallet) {
-          await deleteRemoteLocker(id);
-          throw new Error("Connect your Tari wallet before creating an on-chain locker.");
-        }
-        try {
-          await registerLockerOnOotle(wallet.wallet, componentAddress, id, wallet.network, gate, allowedWallets);
-        } catch (chainError) {
-          await deleteRemoteLocker(id);
-          throw chainError;
-        }
-      }
       navigate("/l/" + id + "#key=" + encrypted.key + "&owner=1");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not create the locker. Check your connection and Supabase Auth settings."); }
     finally { setBusy(false); }
   }
-  return <div className="page-content narrow"><Link to="/app" className="back-link"><ArrowLeft size={15}/> Back to workspace</Link><div className="eyebrow">NEW PRIVATE DROP</div><h1>Create a locker.</h1><p className="page-intro">Connect your Tari wallet, write the content, and choose who can open it.</p><form className="form-card" onSubmit={submit}><label>Locker title<input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. The next chapter" maxLength={80}/></label><label>Short description <span>OPTIONAL</span><input value={description} onChange={e=>setDescription(e.target.value)} placeholder="A little context for people opening the link" maxLength={160}/></label><label>Your content<textarea value={content} onChange={e=>setContent(e.target.value)} placeholder="Write your private note, announcement or message here..." rows={8}/><small>Encrypted in your browser with AES-GCM before it is saved.</small></label><div className="form-divider"/><div className="form-label">WHO CAN OPEN THIS?</div><div className="gate-options"><button type="button" className={gate==="wallet"?"gate-option selected":"gate-option"} onClick={()=>setGate("wallet")}><span className="gate-radio"/><span><b>Any Tari wallet</b><small>Any Tari wallet on the supported network can request access.</small></span></button><button type="button" className={gate==="allowlist"?"gate-option selected":"gate-option"} onClick={()=>setGate("allowlist")}><span className="gate-radio"/><span><b>Selected wallets</b><small>Only addresses you list can request access.</small></span></button></div>{gate==="allowlist"&&<label>Allowed wallet addresses<textarea rows={3} value={allowed} onChange={e=>setAllowed(e.target.value)} placeholder="otl_... one address per line"/></label>}{error&&<p className="form-error">{error}</p>}<div className="form-actions"><Button to="/app" variant="secondary">Cancel</Button><button className="button button-primary" type="submit" disabled={busy}>{busy?"Encrypting...":<>Encrypt & create locker <ArrowRight size={15}/></>}</button></div></form><div className="notice compact"><ShieldCheck size={17}/><p>The decryption key is included in the link fragment. Anyone with the complete link can extract it and decrypt the content outside Contari, even if an Ootle component is configured. Ootle enforces the on-chain claim, but a separate key-release service is still needed to prevent bypassing the app. Do not share sensitive content.</p></div></div>;
+  return <div className="page-content narrow"><Link to="/app" className="back-link"><ArrowLeft size={15}/> Back to workspace</Link><div className="eyebrow">NEW PRIVATE DROP</div><h1>Create a locker.</h1><p className="page-intro">Connect your Tari wallet, write the content, and choose who can open it.</p><form className="form-card" onSubmit={submit}><label>Locker title<input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. The next chapter" maxLength={80}/></label><label>Short description <span>OPTIONAL</span><input value={description} onChange={e=>setDescription(e.target.value)} placeholder="A little context for people opening the link" maxLength={160}/></label><label>Your content<textarea value={content} onChange={e=>setContent(e.target.value)} placeholder="Write your private note, announcement or message here..." rows={8}/><small>Encrypted in your browser with AES-GCM before it is saved.</small></label><div className="form-divider"/><div className="form-label">WHO CAN OPEN THIS?</div><div className="gate-options"><button type="button" className={gate==="wallet"?"gate-option selected":"gate-option"} onClick={()=>setGate("wallet")}><span className="gate-radio"/><span><b>Any Tari wallet</b><small>Any Tari wallet on the supported network can request access.</small></span></button><button type="button" className={gate==="allowlist"?"gate-option selected":"gate-option"} onClick={()=>setGate("allowlist")}><span className="gate-radio"/><span><b>Selected wallets</b><small>Only addresses you list can request access.</small></span></button></div>{gate==="allowlist"&&<label>Allowed wallet addresses<textarea rows={3} value={allowed} onChange={e=>setAllowed(e.target.value)} placeholder="otl_... one address per line"/></label>}{error&&<p className="form-error">{error}</p>}<div className="form-actions"><Button to="/app" variant="secondary">Cancel</Button><button className="button button-primary" type="submit" disabled={busy}>{busy?"Encrypting...":<>Encrypt & create locker <ArrowRight size={15}/></>}</button></div></form><div className="notice compact"><ShieldCheck size={17}/><p>Preview mode: the share link currently carries the decryption key. Anyone with the full link can extract it. Do not use this preview for sensitive content. Mainnet protection requires the published Ootle contract and a secure key-release flow.</p></div></div>;
 }
 
 function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onConnect: () => Promise<void> }) {
@@ -171,8 +158,6 @@ function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onCon
       setMessage(componentAddress ? "Ootle claim submitted: " + (proof as { transactionId: string }).transactionId : "Wallet challenge response received. This demo does not verify it independently.");
       setContent(plain);
       setStatus("open");
-      try { await recordRemoteClaim(locker.id, activeWallet.address, proof); }
-      catch (claimError) { setMessage(claimError instanceof Error ? "Content unlocked, but the claim could not be synced: " + claimError.message : "Content unlocked, but the claim could not be synced."); }
     } catch (e) { setMessage(e instanceof Error ? e.message : "Could not unlock this content."); setStatus("error"); }
   }
   async function copyLink() {

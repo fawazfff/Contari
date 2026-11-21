@@ -27,20 +27,12 @@ function fromB64url(value: string) {
 }
 
 function indexerUrlsFor(network: number): string[] {
-  if (network === 38) {
-    return [
-      "https://esme-indexer-a.ootle.tari.com",
-      "https://esme-indexer-b.ootle.tari.com",
-    ];
-  }
-  if (network === 0) {
-    // Mainnet indexers and the template address are deliberately supplied as
-    // Supabase secrets so we never guess at a production endpoint.
-    return (Deno.env.get("CONTARI_OOTLE_MAINNET_INDEXERS") || "")
-      .split(",").map((value) => value.trim().replace(/\/$/, ""))
-      .filter((value) => value.startsWith("https://"));
-  }
-  return [];
+  const secret = network === 0 ? "CONTARI_OOTLE_MAINNET_INDEXERS"
+    : network === 38 ? "CONTARI_OOTLE_ESMERALDA_INDEXERS" : "";
+  if (!secret) return [];
+  return (Deno.env.get(secret) || "")
+    .split(",").map((value) => value.trim().replace(/\/$/, ""))
+    .filter((value) => value.startsWith("https://"));
 }
 function expectedTemplateAddress(network: number) {
   const name = network === 0 ? "CONTARI_OOTLE_MAINNET_TEMPLATE_ADDRESS"
@@ -308,6 +300,16 @@ Deno.serve(async (req: Request) => {
       const { network } = await consumeChallenge(db, body, "create");
       if (network === 0 && !body.componentAddress) {
         throw new Error("Mainnet lockers must be registered with a deployed Contari Ootle component before a key can be stored.");
+      }
+      if (body.componentAddress) {
+        const configuredIndexers = indexerUrlsFor(network);
+        if (configuredIndexers.length < 2) {
+          throw new Error("Configure two trusted HTTPS Ootle indexers for this network before creating a contract-gated locker.");
+        }
+        const configuredTemplate = normalizeTemplateAddress(expectedTemplateAddress(network));
+        if (!/^[0-9a-f]{64}$/.test(configuredTemplate)) {
+          throw new Error("Configure the published Contari template address for this network before creating a contract-gated locker.");
+        }
       }
       const allowed = body.allowedWallets.map((address: unknown) => {
         if (typeof address !== "string") throw new Error("Invalid allowlist address.");

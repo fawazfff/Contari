@@ -266,7 +266,7 @@ test("workspace library uses a signed wallet challenge to list owned lockers", a
   await page.getByRole("button", { name: /encrypt & create locker/i }).click();
   await expect(page).toHaveURL(/\/l\//);
   const proofsBeforeList = await page.evaluate(() => (window as any).__walletCalls.filter((name: string) => name === "tari_signWalletOwnershipChallenge").length);
-  await page.getByRole("link", { name: /back to workspace/i }).click();
+  await page.getByRole("link", { name: "Workspace", exact: true }).click();
   await expect(page.getByRole("heading", { name: /your lockers/i })).toBeVisible();
   await expect(page.getByText("My saved locker")).toBeVisible();
   const proofsAfterList = await page.evaluate(() => (window as any).__walletCalls.filter((name: string) => name === "tari_signWalletOwnershipChallenge").length);

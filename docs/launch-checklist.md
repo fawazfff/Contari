@@ -29,9 +29,9 @@ Official Tari guides:
 
 ## Production security blocker
 
-New lockers no longer put the AES key in the URL. The key is wrapped by a server-held AES-256-GCM master key and stored in a private key-vault table. Unlock requires a fresh, single-use Tari wallet ownership proof verified by the Edge Function, plus a server-side access-rule check. The Edge Function releases the key only after those checks pass. The Ootle contract must never store the plaintext key.
+New lockers no longer put the AES key in the URL. The key is wrapped by a server-held AES-256-GCM master key and stored in a private key-vault table. Unlock requires a fresh, single-use Tari wallet ownership proof verified by the Edge Function, plus a server-side access-rule check. The Edge Function releases the key only after those checks pass. When a locker has a configured Ootle component, the server independently checks the transaction result and a matching `LockerClaimed` event on a trusted public indexer. It matches the locker hash and the claimant public key to the connected Tari wallet. A locker without a component is protected by the signed-wallet and server-side access checks only. The Ootle contract must never store the plaintext key.
 
-Old lockers created with the previous URL-fragment format cannot be made secure retroactively. Recreate them and stop sharing the old links. The current server-held master key means the service operator can decrypt the wrapped keys; recipient-specific key wrapping is a future improvement if the product needs operator-blind encryption. Real Tari wallet signature interoperability and on-chain transaction verification still need testnet/mainnet validation.
+Old lockers created with the previous URL-fragment format cannot be made secure retroactively. Recreate them and stop sharing the old links. The current server-held master key means the service operator can decrypt the wrapped keys; recipient-specific key wrapping is a future improvement if the product needs operator-blind encryption. Real Tari wallet signature interoperability and the on-chain path still need a testnet deployment and live wallet validation.
 
 ## Test commands
 

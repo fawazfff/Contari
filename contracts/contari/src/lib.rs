@@ -90,14 +90,17 @@ mod contari {
             if self.gates[index] == ALLOWLIST_GATE {
                 assert!(self.allowed_wallets[index].contains(&signer), "wallet is not on the locker allowlist");
             }
-            assert!(!self.claimed_wallets[index].contains(&signer), "this wallet has already claimed this locker");
-
-            self.claimed_wallets[index].push(signer);
-            self.claim_count += 1;
-            emit_event("LockerClaimed", [
-                ("locker_id_hash", locker_id_hash),
-                ("claimant_key", signer.to_string()),
-            ]);
+            // A wallet may open the same shared locker again later. Keep the
+            // registry's unique-claim counter idempotent instead of rejecting
+            // repeat visits or counting the same wallet more than once.
+            if !self.claimed_wallets[index].contains(&signer) {
+                self.claimed_wallets[index].push(signer);
+                self.claim_count += 1;
+                emit_event("LockerClaimed", [
+                    ("locker_id_hash", locker_id_hash),
+                    ("claimant_key", signer.to_string()),
+                ]);
+            }
         }
 
         pub fn get_counts(&self) -> (u64, u64) {

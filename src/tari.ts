@@ -42,7 +42,7 @@ export async function connectTari(): Promise<WalletSession> {
   const provider = await waitForTariProvider();
   if (!provider || typeof provider.request !== "function") {
     throw new Error(
-      "Tari wallet not found in this browser. Open Contari from the Tari Universe web app at universe.tari.mw, or install and connect the Sapient Tari Ootle browser extension. Opening contari-ten.vercel.app in a normal browser tab does not inject a wallet by itself."
+      "Tari wallet unavailable: this page is not running inside Tari Universe. Open Tari Universe first, then open Contari from its browser or dApp area. A normal Safari, Chrome, or social-app browser tab does not inject the Tari wallet provider. If you already opened Contari inside Tari Universe, close and reopen the page, then try connecting again."
     );
   }
 

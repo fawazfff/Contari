@@ -183,7 +183,7 @@ function Library({ wallet }: { wallet: WalletSession | null }) {
   const [error,setError] = useState("");
   useEffect(() => {
     if (!wallet) { setItems([]); return; }
-    loadMyLockers(wallet.address).then(rows => { setError(""); setItems(rows); })
+    loadMyLockers(wallet).then(rows => { setError(""); setItems(rows); })
       .catch(e => setError(e instanceof Error ? e.message : "Could not load lockers."));
   }, [wallet?.address]);
   return <div className="page-content"><div className="page-title-row"><div><div className="eyebrow">YOUR CONTENT</div><h1>My lockers</h1><p>Locker links created by your connected Tari wallet.</p></div><Button to="/app/create"><FilePlus2 size={16}/> New locker</Button></div>

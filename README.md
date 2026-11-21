@@ -30,7 +30,7 @@ The Ootle contract has compiled to WASM in GitHub Actions, but it has **not** ye
 
 New lockers use browser-side AES-256-GCM encryption. The raw AES key is sent over HTTPS to the Contari Secure Edge Function, encrypted again with a random server-held master key, and stored in a private key-vault table. The URL contains only the locker ID. A visitor must connect a Tari wallet and sign a fresh, five-minute, single-use ownership challenge. The Edge Function verifies the Tari Ristretto Schnorr signature against the owner key encoded in the Ootle address, checks the wallet network and the locker access rule, then releases the key over HTTPS.
 
-The key-vault and challenge tables deny access to `anon` and `authenticated`; only the service role can access them. The server master key is stored in a private database schema and exposed to the Edge Function only through a service-role-only function. Challenge creation is rate-limited per wallet.
+The locker, key-vault, and challenge tables deny direct access to `anon` and `authenticated`; only the service role can read or write them. Public locker links are fetched by ID through the Edge Function, and the workspace list requires a fresh signed wallet challenge. The public read response omits the selected-wallet address list. The server master key is stored in a private database schema and exposed to the Edge Function only through a service-role-only function. Challenge creation is rate-limited per wallet.
 
 Important limits:
 1. **Old lockers are not retroactively secured.** Their old URLs still contain their original decryption keys. They are marked as legacy and the app refuses to unlock them through the new flow. Recreate those lockers and stop sharing their old links.
@@ -48,7 +48,7 @@ Run `npm run build` for the production frontend build and `npm run test:e2e` for
 
 The connected Supabase project uses `contari_lockers` for encrypted locker records. The `contari-secure` Edge Function verifies Tari wallet ownership proofs, creates one-time challenges, checks allowlists, and wraps/releases AES keys. `contari_key_vault` and `contari_auth_challenges` are service-role-only. Email authentication is not used by the current app. The wallet-first migration is:
 
-`supabase/migrations/20261121070000_wallet_first_storage.sql` plus the secure key delivery migrations `20261121060429`, `20261121060446`, `20261121060543`, and `20261121061500`.
+`supabase/migrations/20261121070000_wallet_first_storage.sql` plus the secure key delivery migrations `20261121060429`, `20261121060446`, `20261121060543`, `20261121061500`, and `20261121062000`.
 
 The public locker-read policy exposes ciphertext and metadata, not plaintext. The app encrypts content before it is stored.
 

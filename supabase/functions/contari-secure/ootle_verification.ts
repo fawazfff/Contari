@@ -1,8 +1,21 @@
 import { decode } from "npm:cbor-x@1.6.0";
 
+function unwrapTag(value: unknown) {
+  let current = value;
+  for (let i = 0; i < 4; i++) {
+    if (current && typeof current === "object" &&
+        "tag" in current && "value" in current) {
+      current = (current as { value: unknown }).value;
+    } else {
+      break;
+    }
+  }
+  return current;
+}
 function field(payload: unknown, key: string) {
-  if (payload instanceof Map) return payload.get(key);
-  if (payload && typeof payload === "object") return (payload as Record<string, unknown>)[key];
+  const value = unwrapTag(payload);
+  if (value instanceof Map) return unwrapTag(value.get(key));
+  if (value && typeof value === "object") return unwrapTag((value as Record<string, unknown>)[key]);
   return undefined;
 }
 export function normalizeTransactionId(value: unknown) {

@@ -46,7 +46,18 @@ export async function connectTari(): Promise<WalletSession> {
     );
   }
 
-  const accounts = await provider.request({ method: "tari_requestAccounts" }) as string[];
+  let accounts: string[];
+  try {
+    accounts = await provider.request({ method: "tari_requestAccounts" }) as string[];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/not running inside Tari Universe|wallet unavailable|provider unavailable/i.test(message)) {
+      throw new Error(
+        "No Tari wallet provider was detected. Open Contari inside the Tari Web Wallet's dApp view, or use a browser with the Sapient Tari wallet extension installed. A regular mobile browser tab cannot connect by itself."
+      );
+    }
+    throw error;
+  }
   if (!Array.isArray(accounts) || !accounts[0]) {
     throw new Error("No Tari account was selected. Approve the connection in your Tari wallet, then try again.");
   }

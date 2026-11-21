@@ -15,18 +15,21 @@ function makeEvent(options: {
   const lockerHash = options.lockerHash ?? "a".repeat(64);
   const claimant = options.claimant ?? "b".repeat(64);
   const component = options.component ?? "component_" + "12".repeat(32);
-  const prefix = encode([null, { tag: 137, value: template }, options.topic ?? "ContariRegistry.LockerClaimed"]);
-  prefix[0] = 0x84;
+  const topic = encode(options.topic ?? "ContariRegistry.LockerClaimed");
+  const encodedTemplate = encode(template);
   const metadata = encode(new Map([
     ["locker_id_hash", lockerHash],
     ["claimant_key", claimant],
     ["component_address", component],
   ]));
   // Tari Metadata is CBOR tag 129 around its map of raw-CBOR values.
-  const event = new Uint8Array(prefix.length + 2 + metadata.length);
-  event.set(prefix);
-  event.set([0xd8, 0x81], prefix.length);
-  event.set(metadata, prefix.length + 2);
+  const event = new Uint8Array(2 + 2 + encodedTemplate.length + topic.length + 2 + metadata.length);
+  let offset = 0;
+  event.set([0x84, 0xf6, 0xd8, 0x89], offset); offset += 4; // array(4), null substate, tag(137) template address
+  event.set(encodedTemplate, offset); offset += encodedTemplate.length;
+  event.set(topic, offset); offset += topic.length;
+  event.set([0xd8, 0x81], offset); offset += 2; // tag(129) Metadata
+  event.set(metadata, offset);
   return { encoded: b64(event), lockerHash, claimant, component, template: "34".repeat(32) };
 }
 Deno.test("decodes Tari BOR tagged template and metadata payload", () => {

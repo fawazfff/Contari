@@ -55,7 +55,13 @@ export function parseAddress(address: string, network: number) {
   if (data.length !== 64) throw new Error("Malformed Tari Ootle wallet address.");
   const canonical = bech32m.encode(expected, bech32m.toWords(data));
   if (canonical !== address) throw new Error("Wallet address is not canonical.");
-  return data.slice(0, 32);
+  const ownerBytes = data.slice(0, 32);
+  const viewBytes = data.slice(32);
+  if (RistrettoPoint.fromHex(ownerBytes).equals(RistrettoPoint.ZERO) ||
+      RistrettoPoint.fromHex(viewBytes).equals(RistrettoPoint.ZERO)) {
+    throw new Error("Tari Ootle address contains an invalid public key.");
+  }
+  return ownerBytes;
 }
 export function verifyTariWalletProof(input: {
   address: string; network: number; challenge: string;

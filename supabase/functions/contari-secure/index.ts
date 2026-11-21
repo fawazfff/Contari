@@ -183,7 +183,7 @@ async function getService() {
   if (!url || !key) throw new Error("Secure storage service is not configured.");
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
-async function getMasterKey(db: ReturnType<typeof createClient>) {
+async function getMasterKey(db: any) {
   const { data, error } = await db.rpc("contari_get_master_key");
   if (error || typeof data !== "string") throw new Error("Server-side locker encryption key is unavailable.");
   const raw = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
@@ -194,7 +194,7 @@ async function getMasterKey(db: ReturnType<typeof createClient>) {
     raw.fill(0);
   }
 }
-async function wrapKey(db: ReturnType<typeof createClient>, keyValue: string) {
+async function wrapKey(db: any, keyValue: string) {
   const raw = fromB64url(keyValue);
   if (raw.length !== 32) throw new Error("The locker encryption key must be 256 bits.");
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -205,7 +205,7 @@ async function wrapKey(db: ReturnType<typeof createClient>, keyValue: string) {
     raw.fill(0);
   }
 }
-async function unwrapKey(db: ReturnType<typeof createClient>, row: { wrapped_key: string; wrap_iv: string }) {
+async function unwrapKey(db: any, row: { wrapped_key: string; wrap_iv: string }) {
   const raw = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: fromB64url(row.wrap_iv) },
     await getMasterKey(db),
@@ -216,7 +216,7 @@ async function unwrapKey(db: ReturnType<typeof createClient>, row: { wrapped_key
   bytes.fill(0);
   return encoded;
 }
-async function consumeChallenge(db: ReturnType<typeof createClient>, body: any, purpose: string) {
+async function consumeChallenge(db: any, body: any, purpose: string) {
   const { data, error } = await db.from("contari_auth_challenges").select("*")
     .eq("id", body.challengeId).eq("purpose", purpose).eq("wallet_address", body.walletAddress)
     .is("used_at", null).gt("expires_at", new Date().toISOString()).single();

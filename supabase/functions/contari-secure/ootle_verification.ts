@@ -25,6 +25,16 @@ function templateAddress(value: unknown) {
   if (typeof unwrapped === "string") return unwrapped.toLowerCase().replace(/^template_/, "").replace(/^0x/, "");
   return "";
 }
+export function isCommittedTransactionResult(response: unknown) {
+  if (!response || typeof response !== "object") return false;
+  const result = (response as Record<string, unknown>).result ?? response;
+  if (!result || typeof result !== "object") return false;
+  const record = result as Record<string, unknown>;
+  if ("Rejected" in record || "Pending" in record) return false;
+  const finalized = record.Finalized;
+  return !!finalized && typeof finalized === "object" &&
+    (finalized as Record<string, unknown>).final_decision === "Commit";
+}
 export function normalizeTransactionId(value: unknown) {
   if (typeof value !== "string") throw new Error("The Tari indexer did not return a transaction ID.");
   const id = value.trim().replace(/^0x/i, "").toLowerCase();

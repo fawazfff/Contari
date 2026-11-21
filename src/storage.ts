@@ -114,7 +114,7 @@ export async function createSecureLocker(locker: Locker, key: string, session: W
       allowedWallets: locker.allowedWallets, key,
     },
   });
-  if (error) throw new Error(data?.error || error.message || "Secure locker creation failed.");
+  if (error) throw new Error(data?.error || await edgeFunctionError(error, "Secure locker creation failed."));
   saveLocker({ ...locker, creatorNetwork: session.network, keyVersion: 2 });
 }
 async function requestWalletChallenge(lockerId: string, purpose: "create" | "unlock", session: import("./tari").WalletSession) {
@@ -134,7 +134,8 @@ export async function unlockSecureLocker(lockerId: string, session: import("./ta
       signature: proof.signature, publicNonce: proof.publicNonce,
     },
   });
-  if (error || !data?.key) throw new Error(data?.error || error?.message || "The server did not release the locker key.");
+  if (error) throw new Error(data?.error || await edgeFunctionError(error, "The server did not release the locker key."));
+  if (typeof data?.key !== "string" || !data.key) throw new Error("The server did not release the locker key.");
   return data.key as string;
 }
 

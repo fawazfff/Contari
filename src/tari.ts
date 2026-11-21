@@ -68,3 +68,20 @@ export async function disconnectTari(session?: WalletSession) {
 export function shortAddress(address: string) {
   return address.length > 20 ? address.slice(0, 10) + "..." + address.slice(-7) : address;
 }
+
+export async function signTariChallenge(session: WalletSession, challenge: string) {
+  if (!session.capabilities?.walletOwnershipProof) {
+    throw new Error("This Tari wallet does not support signed ownership challenges. Update the wallet before using secure lockers.");
+  }
+  const proof = await session.wallet.request({
+    method: "tari_signWalletOwnershipChallenge",
+    params: { challenge },
+  }) as { walletAddress?: string; publicNonce?: string; signature?: string };
+  if (!proof?.walletAddress || proof.walletAddress.toLowerCase() !== session.address.toLowerCase()) {
+    throw new Error("The signed wallet proof does not match the connected Tari account.");
+  }
+  if (!proof.signature || !proof.publicNonce) {
+    throw new Error("The Tari wallet did not return a complete ownership signature.");
+  }
+  return { signature: proof.signature, publicNonce: proof.publicNonce };
+}

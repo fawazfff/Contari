@@ -43,4 +43,4 @@ npm run test:e2e
 cargo build --manifest-path contracts/contari/Cargo.toml --target wasm32-unknown-unknown --release
 ```
 
-GitHub Actions runs the frontend build, Playwright browser tests, and contract WASM build on pushes and pull requests to `main`.
+GitHub Actions runs the frontend build, Playwright browser tests, Deno cryptographic proof tests, a live integration test against the deployed secure-key Edge Function, and the contract WASM build on pushes and pull requests to `main`.

@@ -53,7 +53,7 @@ export function parseAddress(address: string, network: number) {
   if (decoded.prefix !== expected) throw new Error("Wallet address and active network do not match.");
   const data = Uint8Array.from(bech32m.fromWords(decoded.words));
   if (data.length !== 64) throw new Error("Malformed Tari Ootle wallet address.");
-  const canonical = bech32m.encode(expected, bech32m.toWords(data));
+  const canonical = bech32m.encode(expected, bech32m.toWords(data), 128);
   if (canonical !== address) throw new Error("Wallet address is not canonical.");
   const ownerBytes = data.slice(0, 32);
   const viewBytes = data.slice(32);

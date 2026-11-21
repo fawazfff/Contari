@@ -121,6 +121,16 @@ export async function claimLockerOnOotle(
   return submitMethod(wallet, componentAddress, "claim_locker", args);
 }
 
+export async function getOotleTransactionResult(wallet: TariRequest, transactionId: string) {
+  const response = await wallet.request({ method: "tari_getTransactionResult", params: { transactionId } });
+  const outcome = response?.result?.outcome ?? response?.outcome;
+  if (outcome !== "Commit") {
+    const reason = response?.result?.reason ?? response?.reason ?? outcome ?? "unknown";
+    throw new Error("Ootle transaction is not confirmed as committed (" + String(reason) + "). Content remains locked.");
+  }
+  return response;
+}
+
 export function isValidOotleComponentAddress(value: string) {
   return /^component_[0-9a-f]{64}$/i.test(value.trim());
 }

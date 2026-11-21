@@ -122,13 +122,17 @@ export async function claimLockerOnOotle(
 }
 
 export async function getOotleTransactionResult(wallet: TariRequest, transactionId: string) {
-  const response = await wallet.request({ method: "tari_getTransactionResult", params: { transactionId } });
-  const outcome = response?.result?.outcome ?? response?.outcome;
-  if (outcome !== "Commit") {
-    const reason = response?.result?.reason ?? response?.reason ?? outcome ?? "unknown";
-    throw new Error("Ootle transaction is not confirmed as committed (" + String(reason) + "). Content remains locked.");
+  const response = await wallet.request({
+    method: "tari_getTransactionResult",
+    params: { transactionId },
+  });
+  const result = response?.result ?? response;
+  if (result?.Finalized) return response;
+  if (result?.Rejected || result?.FinalizedAbort) {
+    const reason = result?.Rejected?.reason ?? result?.FinalizedAbort?.reason ?? "transaction rejected";
+    throw new Error("Ootle rejected this transaction: " + String(reason) + ". Content remains locked.");
   }
-  return response;
+  throw new Error("Ootle has not finalized this transaction yet. Check the wallet transaction history and try again later. Content remains locked.");
 }
 
 export function isValidOotleComponentAddress(value: string) {

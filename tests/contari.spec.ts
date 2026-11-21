@@ -83,16 +83,16 @@ test("settings reject malformed component addresses and save a valid-shaped valu
 test("wallet connects and can be disconnected from settings", async ({ page }) => {
   await installWallet(page);
   await page.goto("/app/settings");
-  await page.getByRole("button", { name: /connect wallet/i }).click();
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
   await expect(page.getByText(walletAddress.slice(0, 10))).toBeVisible();
   await page.getByRole("button", { name: /disconnect/i }).click();
-  await expect(page.getByRole("button", { name: /connect wallet/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect wallet", exact: true })).toBeVisible();
 });
 
 test("creates an encrypted locker and opens it with the complete preview link", async ({ page }) => {
   await installWallet(page);
   await page.goto("/app/create");
-  await page.getByRole("button", { name: /connect wallet/i }).click();
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
   await expect(page.getByText(walletAddress.slice(0, 10))).toBeVisible();
   await page.getByLabel("Locker title").fill("Launch notes");
   await page.getByLabel("Short description").fill("For the team");
@@ -108,7 +108,7 @@ test("creates an encrypted locker and opens it with the complete preview link", 
 test("selected-wallet gate blocks an address that is not on the list", async ({ page }) => {
   await installWallet(page);
   await page.goto("/app/create");
-  await page.getByRole("button", { name: /connect wallet/i }).click();
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
   await page.getByLabel("Locker title").fill("Selected only");
   await page.getByLabel("Your content").fill("Restricted note");
   await page.getByRole("button", { name: /selected wallets/i }).click();
@@ -123,7 +123,7 @@ test("copy-link action reports success when clipboard is available", async ({ pa
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await installWallet(page);
   await page.goto("/app/create");
-  await page.getByRole("button", { name: /connect wallet/i }).click();
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
   await page.getByLabel("Locker title").fill("Copy check");
   await page.getByLabel("Your content").fill("Copy this link");
   await page.getByRole("button", { name: /encrypt & create locker/i }).click();

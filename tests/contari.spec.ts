@@ -30,6 +30,12 @@ async function mockSecureFunction(page: Page) {
     const body = route.request().postDataJSON() as Record<string, any>;
     if (body.action === "challenge") {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: "challenge-" + body.purpose, challenge: "contari:" + body.purpose + ":" + body.lockerId + ":test", expires_at: new Date(Date.now() + 300000).toISOString() }) });
+    } else if (body.action === "read") {
+      const row = lockerRow && lockerRow.id === body.lockerId ? { ...lockerRow, allowed_wallets: undefined } : null;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ locker: row }) });
+    } else if (body.action === "list") {
+      const rows = lockerRow && String(lockerRow.creator_wallet).toLowerCase() === String(body.walletAddress).toLowerCase() ? [lockerRow] : [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ lockers: rows }) });
     } else if (body.action === "create") {
       secureKey = body.key;
       lockerRow = { id: body.id, title: body.title, description: body.description, ciphertext: body.ciphertext, iv: body.iv, gate: body.gate, allowed_wallets: body.allowedWallets, creator_wallet: body.walletAddress, creator_network: body.network, key_version: 2, ootle_component_address: body.componentAddress || null, created_at: new Date().toISOString() };

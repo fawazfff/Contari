@@ -146,7 +146,7 @@ test("selected-wallet gate blocks an address that is not on the list", async ({ 
   await page.getByRole("button", { name: /encrypt & create locker/i }).click();
   await expect(page).toHaveURL(/\/l\//);
   await page.getByRole("button", { name: /connect & unlock/i }).click();
-  await expect(page.getByText(/not on the access list/i)).toBeVisible();
+  await expect(page.getByText(/not allowed to open this locker/i)).toBeVisible();
 });
 
 test("copy-link action reports success when clipboard is available", async ({ page, context }) => {

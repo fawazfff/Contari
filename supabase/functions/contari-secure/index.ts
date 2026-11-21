@@ -30,8 +30,12 @@ function indexerUrlsFor(network: number): string[] {
   const secret = network === 0 ? "CONTARI_OOTLE_MAINNET_INDEXERS"
     : network === 38 ? "CONTARI_OOTLE_ESMERALDA_INDEXERS" : "";
   if (!secret) return [];
-  const urls = (Deno.env.get(secret) || "")
-    .split(",").map((value) => value.trim().replace(/\/$/, ""))
+  const defaults = network === 0
+    ? ["https://indexer-a.ootle.tari.com", "https://indexer-b.ootle.tari.com"]
+    : ["https://esme-indexer-a.ootle.tari.com", "https://esme-indexer-b.ootle.tari.com"];
+  const configured = Deno.env.get(secret)?.trim();
+  const urls = (configured ? configured.split(",") : defaults)
+    .map((value) => value.trim().replace(/\/$/, ""))
     .filter((value) => {
       try { return new URL(value).protocol === "https:"; } catch { return false; }
     });

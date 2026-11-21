@@ -111,7 +111,7 @@ test("wallet connects and can be disconnected from settings", async ({ page }) =
   await expect(page.getByRole("button", { name: "Connect wallet", exact: true })).toBeVisible();
 });
 
-test("creates an encrypted locker and opens it with the complete preview link", async ({ page }) => {
+test("creates an encrypted locker and opens it with the keyless locker link", async ({ page }) => {
   await installWallet(page);
   await page.goto("/app/create");
   await page.getByRole("button", { name: "Connect wallet", exact: true }).click();

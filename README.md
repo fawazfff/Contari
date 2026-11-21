@@ -48,9 +48,9 @@ Run `npm run build` for the production frontend build and `npm run test:e2e` for
 
 The connected Supabase project uses `contari_lockers` for encrypted locker records. The `contari-secure` Edge Function verifies Tari wallet ownership proofs, creates one-time challenges, checks allowlists, and wraps/releases AES keys. `contari_key_vault` and `contari_auth_challenges` are service-role-only. Email authentication is not used by the current app. The wallet-first migration is:
 
-`supabase/migrations/20261121070000_wallet_first_storage.sql` plus the secure key delivery migrations `20261121060429`, `20261121060446`, `20261121060543`, `20261121061605`, and `20261121062950`.
+`supabase/migrations/20261121070000_wallet_first_storage.sql` plus the secure key delivery migrations `20261121060429`, `20261121060446`, `20261121060543`, `20261121061440`, `20261121061605`, and `20261121062950`.
 
-The public locker-read policy exposes ciphertext and metadata, not plaintext. The app encrypts content before it is stored.
+The public Edge Function read endpoint returns ciphertext and non-sensitive metadata for one unguessable locker ID. Direct client access to the locker table is revoked. The app encrypts content before it is stored.
 
 ## Ootle contract
 

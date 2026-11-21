@@ -65,7 +65,7 @@ test("create form requires a wallet and validates empty content", async ({ page 
   await expect(page.getByText(/connect a tari wallet to continue/i)).toBeVisible();
   await installWallet(page);
   await page.reload();
-  await page.getByRole("button", { name: /connect wallet/i }).click();
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
   await page.getByRole("button", { name: /encrypt & create locker/i }).click();
   await expect(page.getByText(/add a title and the content you want to lock/i)).toBeVisible();
 });

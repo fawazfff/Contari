@@ -14,6 +14,7 @@ export type WalletSession = {
   address: string;
   network: string;
   wallet: TariWallet;
+  capabilities?: { walletOwnershipProof?: boolean; transactionResultLookup?: boolean };
 };
 
 export async function connectTari(): Promise<WalletSession> {
@@ -28,11 +29,12 @@ export async function connectTari(): Promise<WalletSession> {
   }
 
   const network = await provider.request({ method: "tari_getNetwork" }) as string;
+  const capabilities = await provider.request({ method: "tari_getCapabilities" }).catch(() => ({})) as { walletOwnershipProof?: boolean; transactionResultLookup?: boolean };
   if (!network || typeof network !== "string") {
     throw new Error("The Tari wallet did not return its active network.");
   }
 
-  return { address: accounts[0], network, wallet: provider };
+  return { address: accounts[0], network, wallet: provider, capabilities };
 }
 
 /**
@@ -42,6 +44,7 @@ export async function connectTari(): Promise<WalletSession> {
  * transaction and the contract's CallerContext signer check.
  */
 export async function proveWalletOwnership(session: WalletSession, lockerId: string) {
+  if (!session.capabilities?.walletOwnershipProof) throw new Error("This Tari wallet does not support wallet ownership proofs. Update the wallet or use another connected Tari wallet.");
   const challenge = "contari-access:" + lockerId + ":" + crypto.randomUUID() + ":" + Date.now();
   const proof = await session.wallet.request({
     method: "tari_signWalletOwnershipChallenge",

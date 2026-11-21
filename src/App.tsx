@@ -144,7 +144,7 @@ function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onCon
       let activeWallet = wallet;
       if (!activeWallet) { await onConnect(); activeWallet = (window as any).__contariWallet || null; }
       if (!activeWallet) throw new Error("Connect your Tari wallet, then try again.");
-      if (locker.gate === "allowlist" && !locker.allowedWallets.some(address => address.toLowerCase() === activeWallet!.address.toLowerCase())) throw new Error("This wallet is not on the access list.");
+      if (locker.gate === "allowlist" && !locker.allowedWallets.some(address => address.trim().toLowerCase() === activeWallet!.address.trim().toLowerCase())) throw new Error("This Tari wallet is not on the access list.");
       if (!key) throw new Error("This link is missing its decryption key. Ask the creator to share the complete link.");
       const componentAddress = getConfiguredOotleComponent();
       let proof: unknown;
@@ -154,6 +154,7 @@ function LockerView({ wallet, onConnect }: { wallet: WalletSession | null; onCon
       } else {
         proof = await proveWalletOwnership(activeWallet, locker.id);
       }
+      if (componentAddress) throw new Error("Ootle transaction submitted. Contari cannot confirm final on-chain execution yet, so the content remains locked.");
       const plain = await decryptContent(locker.ciphertext, locker.iv, key);
       setMessage(componentAddress ? "Ootle claim submitted: " + (proof as { transactionId: string }).transactionId : "Wallet challenge received. This preview is not a verified mainnet unlock.");
       setContent(plain);

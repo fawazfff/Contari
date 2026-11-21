@@ -29,9 +29,9 @@ Official Tari guides:
 
 ## Production security blocker
 
-The current link still carries the AES key in its URL fragment. That makes the full link a bearer secret. A recipient can extract the key and decrypt the ciphertext without connecting a wallet or submitting an Ootle claim. The registry can record and enforce who is allowed to claim, but it cannot make the browser-held key secret after the creator shares it.
+New lockers no longer put the AES key in the URL. The key is wrapped by a server-held AES-256-GCM master key and stored in a private key-vault table. Unlock requires a fresh, single-use Tari wallet ownership proof verified by the Edge Function, plus a server-side access-rule check. The Edge Function releases the key only after those checks pass. The Ootle contract must never store the plaintext key.
 
-Do not describe this version as confidential or launch it for sensitive content until key delivery is redesigned and tested. A production design needs a cryptographically verified wallet authorization step and a secure key-release or recipient key-wrapping scheme. The Ootle contract must never store the plaintext key.
+Old lockers created with the previous URL-fragment format cannot be made secure retroactively. Recreate them and stop sharing the old links. The current server-held master key means the service operator can decrypt the wrapped keys; recipient-specific key wrapping is a future improvement if the product needs operator-blind encryption. Real Tari wallet signature interoperability and on-chain transaction verification still need testnet/mainnet validation.
 
 ## Test commands
 

@@ -25,15 +25,6 @@ function templateAddress(value: unknown) {
   if (typeof unwrapped === "string") return unwrapped.toLowerCase().replace(/^template_/, "").replace(/^0x/, "");
   return "";
 }
-function componentAddress(value: unknown) {
-  const substate = unwrapTagged(value);
-  if (Array.isArray(substate) && substate[0] === 0) {
-    const address = unwrapTagged(substate[1]);
-    if (address instanceof Uint8Array) return "component_" + bytesHex(address);
-    if (typeof address === "string") return address.toLowerCase();
-  }
-  return "";
-}
 export function isCommittedTransactionResult(response: unknown) {
   if (!response || typeof response !== "object") return false;
   const result = (response as Record<string, unknown>).result ?? response;
@@ -61,7 +52,7 @@ export function decodeLockerClaimEvent(encodedBase64: string) {
     topic: typeof decoded[2] === "string" ? decoded[2] : "",
     lockerIdHash: field(decoded[3], "locker_id_hash"),
     claimantKey: field(decoded[3], "claimant_key"),
-    componentAddress: componentAddress(decoded[0]),
+    componentAddress: field(decoded[3], "component_address"),
   };
 }
 

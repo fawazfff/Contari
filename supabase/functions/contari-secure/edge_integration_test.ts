@@ -136,3 +136,36 @@ Deno.test("deployed secure service wraps keys and releases only to signed allowl
   assertEquals(opened.status, 200, JSON.stringify(opened.data));
   assertEquals(opened.data.key, lockerKey);
 });
+
+Deno.test("a locker configured for Ootle cannot release its key without a claim transaction", async () => {
+  const creator = makeWallet();
+  const recipient = makeWallet();
+  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+  const rawKey = crypto.getRandomValues(new Uint8Array(32));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cryptoKey = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt"]);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv }, cryptoKey, enc.encode("Ootle gate integration test"),
+  ));
+  const lockerKey = b64url(rawKey);
+  const createChallenge = await challenge(creator, id, "create");
+  const createProof = signChallenge(creator.secret, creator.address, createChallenge.challenge);
+  const created = await call({
+    action: "create", challengeId: createChallenge.id,
+    walletAddress: creator.address, network, ...createProof,
+    id, title: "Ootle-gated CI test", description: "Must require a claim",
+    ciphertext: b64url(ciphertext), iv: b64url(iv),
+    gate: "allowlist", allowedWallets: [recipient.address],
+    key: lockerKey, componentAddress: "component_" + "a".repeat(64),
+  });
+  assertEquals(created.status, 201, JSON.stringify(created.data));
+
+  const unlockChallenge = await challenge(recipient, id, "unlock");
+  const unlockProof = signChallenge(recipient.secret, recipient.address, unlockChallenge.challenge);
+  const denied = await call({
+    action: "unlock", challengeId: unlockChallenge.id, lockerId: id,
+    walletAddress: recipient.address, network, ...unlockProof,
+  });
+  assertEquals(denied.status, 400, JSON.stringify(denied.data));
+  assert(String(denied.data.error).includes("requires an Ootle claim transaction"));
+});

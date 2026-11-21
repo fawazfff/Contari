@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.87.1";
 import { networkByte, parseAddress, verifyTariWalletProof } from "./crypto.ts";
+import { matchesLockerClaimEvent, normalizeTransactionId } from "./ootle_verification.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +25,108 @@ function fromB64url(value: string) {
   const raw = atob(value.replaceAll("-", "+").replaceAll("_", "/") + "=".repeat((4 - value.length % 4) % 4));
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
+
+const indexerUrls: Record<number, string[]> = {
+  0: ["https://indexer-a.ootle.tari.com", "https://indexer-b.ootle.tari.com"],
+  38: ["https://esme-indexer-a.ootle.com", "https://esme-indexer-b.ootle.com"],
+};
+function hex(bytes: Uint8Array) {
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+async function indexerJson(base: string, path: string) {
+  const response = await fetch(base + path, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(7000),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error("Tari indexer returned HTTP " + response.status + ".");
+  return await response.json();
+}
+async function indexerHasClaimEvent(
+  base: string,
+  transactionId: string,
+  componentAddress: string,
+  expectedLockerHash: string,
+  expectedClaimant: string,
+) {
+  let beforeId: string | undefined;
+  for (let page = 0; page < 4; page++) {
+    const query = new URLSearchParams({
+      topic: "LockerClaimed",
+      substate_id: componentAddress,
+      limit: "100",
+      offset: "0",
+    });
+    if (beforeId) query.set("before_id", beforeId);
+    const result = await indexerJson(base, "/transactions/events?" + query.toString());
+    const events = Array.isArray(result?.events) ? result.events : [];
+    for (const item of events) {
+      if (!Array.isArray(item) || item.length < 2) continue;
+      let eventTransactionId = "";
+      try { eventTransactionId = normalizeTransactionId(item[0]); } catch { continue; }
+      if (eventTransactionId !== transactionId) continue;
+      if (matchesLockerClaimEvent(String(item[1]), expectedLockerHash, expectedClaimant)) return true;
+    }
+    if (result?.next_before_id === undefined || result?.next_before_id === null) break;
+    beforeId = String(result.next_before_id);
+  }
+  return false;
+}
+async function verifyOotleClaim(
+  network: number,
+  transactionIdValue: unknown,
+  componentAddress: string,
+  lockerId: string,
+  walletAddress: string,
+) {
+  const txId = normalizeTransactionId(transactionIdValue);
+  const bases = indexerUrls[network];
+  if (!bases?.length) throw new Error("No trusted public Ootle indexer is configured for this network. The locker key remains locked.");
+  let committed = false;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 10 && !committed; attempt++) {
+    for (const base of bases) {
+      try {
+        const result = await indexerJson(base, "/transactions/" + txId + "/result");
+        if (!result) continue;
+        if (result.Rejected) throw new Error("Ootle rejected the claim transaction.");
+        if (result.Finalized) {
+          if (result.Finalized.final_decision !== "Commit") {
+            throw new Error("Ootle claim did not commit. The locker key remains locked.");
+          }
+          committed = true;
+          break;
+        }
+      } catch (error) {
+        if (error instanceof Error && /did not commit|rejected the claim/.test(error.message)) throw error;
+        lastError = error;
+      }
+    }
+    if (!committed && attempt < 9) await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  if (!committed) {
+    throw new Error(lastError instanceof Error
+      ? "Could not confirm the Ootle claim with a trusted indexer: " + lastError.message
+      : "The Ootle claim is not finalized on the public indexer yet. The locker key remains locked.");
+  }
+  const lockerHashBytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(lockerId)));
+  const expectedLockerHash = hex(lockerHashBytes);
+  const expectedClaimant = hex(parseAddress(walletAddress, network));
+  for (let attempt = 0; attempt < 10; attempt++) {
+    for (const base of bases) {
+      try {
+        if (await indexerHasClaimEvent(base, txId, componentAddress, expectedLockerHash, expectedClaimant)) return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (attempt < 9) await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(lastError instanceof Error
+    ? "The claim is finalized, but its LockerClaimed event could not be verified: " + lastError.message
+    : "The claim is finalized, but the expected LockerClaimed event was not found. The locker key remains locked.");
+}
+
 async function getService() {
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -91,6 +194,10 @@ function validateLocker(body: any) {
   if (!Array.isArray(body.allowedWallets) || body.allowedWallets.length > 100) throw new Error("Invalid wallet allowlist.");
   if (body.gate === "allowlist" && body.allowedWallets.length === 0) throw new Error("Add at least one allowed wallet.");
   if (body.gate === "wallet" && body.allowedWallets.length) throw new Error("Remove the allowlist or choose selected wallets.");
+  if (body.componentAddress !== null && body.componentAddress !== undefined && body.componentAddress !== "" &&
+      (typeof body.componentAddress !== "string" || !/^component_[0-9a-f]{64}$/i.test(body.componentAddress))) {
+    throw new Error("The Ootle registry component address is invalid.");
+  }
 }
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -134,6 +241,7 @@ Deno.serve(async (req: Request) => {
         id: body.id, owner_id: null, title: body.title.trim(), description: body.description,
         ciphertext: body.ciphertext, iv: body.iv, gate: body.gate, allowed_wallets: allowed,
         creator_wallet: body.walletAddress, creator_network: String(body.network).trim().toLowerCase(), key_version: 2,
+        ootle_component_address: body.componentAddress ? String(body.componentAddress).trim().toLowerCase() : null,
       });
       if (lockerError) throw lockerError;
       const { error: vaultError } = await db.from("contari_key_vault").insert({
@@ -149,7 +257,7 @@ Deno.serve(async (req: Request) => {
       if (!validId(body.lockerId)) throw new Error("Invalid locker ID.");
       const { network } = await consumeChallenge(db, body, "unlock");
       const { data: locker, error } = await db.from("contari_lockers")
-        .select("id,gate,allowed_wallets,creator_wallet,creator_network,key_version")
+        .select("id,gate,allowed_wallets,creator_wallet,creator_network,key_version,ootle_component_address")
         .eq("id", body.lockerId).single();
       if (error || !locker || locker.key_version !== 2) throw new Error("Secure locker not found. Older lockers must be recreated.");
       if (locker.creator_network !== String(body.network).trim().toLowerCase()) throw new Error("This wallet is on a different Tari network from the locker.");
@@ -157,6 +265,12 @@ Deno.serve(async (req: Request) => {
       const isAllowed = locker.gate === "wallet" ||
         (Array.isArray(locker.allowed_wallets) && locker.allowed_wallets.some((a: string) => a.toLowerCase() === body.walletAddress.toLowerCase()));
       if (!isCreator && !isAllowed) throw new Error("This Tari wallet is not allowed to open this locker.");
+      if (locker.ootle_component_address) {
+        if (!body.transactionId) throw new Error("This locker requires an Ootle claim transaction. No key was released.");
+        await verifyOotleClaim(network, body.transactionId, locker.ootle_component_address, body.lockerId, body.walletAddress);
+      } else if (body.transactionId) {
+        throw new Error("This locker was not configured for Ootle claims.");
+      }
       const { data: vault, error: vaultError } = await db.from("contari_key_vault")
         .select("wrapped_key,wrap_iv").eq("locker_id", body.lockerId).single();
       if (vaultError || !vault) throw new Error("The locker key is unavailable.");

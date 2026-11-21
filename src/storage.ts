@@ -92,7 +92,7 @@ export async function loadMyLockers(walletAddress: string): Promise<Locker[]> {
   if (!address) return [];
   const { data, error } = await supabase
     .from("contari_lockers")
-    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,created_at")
+    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,creator_network,key_version,created_at")
     .eq("creator_wallet", address)
     .order("created_at", { ascending: false });
   if (error) throw error;

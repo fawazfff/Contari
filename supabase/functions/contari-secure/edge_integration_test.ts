@@ -6,7 +6,7 @@ import { bech32m } from "npm:bech32@2.0.0";
 const L = (1n << 252n) + 27742317777372353535851937790883648493n;
 const enc = new TextEncoder();
 const network = "esmeralda";
-const networkByte = 38;
+const networkBytes: Record<string, number> = { esmeralda: 38, mainnet: 0 };
 function randomScalar() {
   const bytes = crypto.getRandomValues(new Uint8Array(64));
   let n = 0n;
@@ -46,19 +46,19 @@ function b64url(bytes: Uint8Array) {
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
-function makeWallet() {
+function makeWallet(networkName = network) {
   const secret = randomScalar();
   const owner = RistrettoPoint.BASE.multiply(secret).toRawBytes();
   const view = RistrettoPoint.BASE.multiply(randomScalar()).toRawBytes();
-  const address = bech32m.encode("otl_esm_", bech32m.toWords(new Uint8Array([...owner, ...view])));
+  const address = bech32m.encode(networkName === "mainnet" ? "otl_" : "otl_esm_", bech32m.toWords(new Uint8Array([...owner, ...view])));
   return { secret, address };
 }
-function signChallenge(secret: bigint, address: string, challenge: string) {
+function signChallenge(secret: bigint, address: string, challenge: string, networkName = network) {
   const owner = RistrettoPoint.BASE.multiply(secret).toRawBytes();
   const nonceSecret = randomScalar();
   const nonce = RistrettoPoint.BASE.multiply(nonceSecret).toRawBytes();
   const message = domainHash("com.tari.paylink.wallet_ownership_proof.v1.v1", [
-    Uint8Array.of(networkByte), enc.encode(address), enc.encode(challenge),
+    Uint8Array.of(networkBytes[networkName]), enc.encode(address), enc.encode(challenge),
   ]);
   const challengeScalar = leNumber(domainHash("com.tari.schnorr_signature.v1.challenge", [
     nonce, owner, message,
@@ -79,8 +79,8 @@ async function call(body: Record<string, unknown>) {
   const data = await response.json();
   return { status: response.status, data };
 }
-async function challenge(wallet: ReturnType<typeof makeWallet>, lockerId: string, purpose: "create" | "unlock") {
-  const result = await call({ action: "challenge", lockerId, purpose, walletAddress: wallet.address, network });
+async function challenge(wallet: ReturnType<typeof makeWallet>, lockerId: string, purpose: "create" | "unlock", networkName = network) {
+  const result = await call({ action: "challenge", lockerId, purpose, walletAddress: wallet.address, network: networkName });
   assertEquals(result.status, 200, JSON.stringify(result.data));
   return result.data as { id: string; challenge: string };
 }
@@ -168,4 +168,26 @@ Deno.test("a locker configured for Ootle cannot release its key without a claim 
   });
   assertEquals(denied.status, 400, JSON.stringify(denied.data));
   assert(String(denied.data.error).includes("requires an Ootle claim transaction"));
+});
+
+Deno.test("mainnet creation fails closed until a Contari Ootle component is configured", async () => {
+  const creator = makeWallet("mainnet");
+  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+  const rawKey = crypto.getRandomValues(new Uint8Array(32));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cryptoKey = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt"]);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv }, cryptoKey, enc.encode("Mainnet must require a registry"),
+  ));
+  const challengeData = await challenge(creator, id, "create", "mainnet");
+  const proof = signChallenge(creator.secret, creator.address, challengeData.challenge, "mainnet");
+  const result = await call({
+    action: "create", challengeId: challengeData.id,
+    walletAddress: creator.address, network: "mainnet", ...proof,
+    id, title: "Mainnet gate test", description: "No component must fail closed",
+    ciphertext: b64url(ciphertext), iv: b64url(iv), gate: "wallet",
+    allowedWallets: [], key: b64url(rawKey), componentAddress: null,
+  });
+  assertEquals(result.status, 400, JSON.stringify(result.data));
+  assert(String(result.data.error).includes("Mainnet lockers must be registered"));
 });

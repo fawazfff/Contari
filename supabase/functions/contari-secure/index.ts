@@ -233,7 +233,7 @@ Deno.serve(async (req: Request) => {
         .select("id,title,description,ciphertext,iv,gate,creator_wallet,creator_network,key_version,ootle_component_address,created_at")
         .eq("id", body.lockerId).maybeSingle();
       if (error) throw error;
-      return json(200, { locker: data ? { ...data, allowed_wallets: [] } : null });
+      return json(200, { locker: data });
     }
     if (body.action === "list") {
       if (body.lockerId !== "workspace") throw new Error("Invalid workspace request.");

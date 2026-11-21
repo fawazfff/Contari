@@ -79,10 +79,10 @@ Contract-gated lockers fail closed unless the secure Edge Function can verify th
 Set these Supabase Edge Function secrets after publishing the template and creating a component:
 
 - `CONTARI_OOTLE_ESMERALDA_TEMPLATE_ADDRESS`: the published Contari template address used on Esmeralda.
-- `CONTARI_OOTLE_ESMERALDA_INDEXERS`: two comma-separated HTTPS Esmeralda indexer base URLs.
+- `CONTARI_OOTLE_ESMERALDA_INDEXERS`: optional comma-separated HTTPS Esmeralda indexer base URLs. Defaults to Tari's public pair: `https://esme-indexer-a.ootle.tari.com` and `https://esme-indexer-b.ootle.tari.com`.
 - `CONTARI_OOTLE_MAINNET_TEMPLATE_ADDRESS`: the published Contari template address used on mainnet.
-- `CONTARI_OOTLE_MAINNET_INDEXERS`: two comma-separated HTTPS mainnet indexer base URLs.
+- `CONTARI_OOTLE_MAINNET_INDEXERS`: optional comma-separated HTTPS mainnet indexer base URLs. Defaults to Tari's public pair: `https://indexer-a.ootle.tari.com` and `https://indexer-b.ootle.tari.com`.
 
-The function does not guess at a second indexer URL. Both networks require two explicitly configured indexers and the published template address before contract-gated locker creation is accepted. Mainnet locker creation also requires a registry component address.
+The function uses Tari's published public indexer endpoints by default and permits explicit overrides for operators who run their own indexers. Both networks still require the published template address before contract-gated locker creation is accepted. Mainnet locker creation also requires a registry component address.
 
 The Edge Function queries `GET /transactions/{transaction_id}/result` and `GET /transactions/events`. It requires a committed result and a matching `ContariRegistry.LockerClaimed` event on both indexers. The event must contain the expected locker hash, signer key and emitting component address, and its template address must match the configured deployed template.

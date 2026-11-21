@@ -274,3 +274,12 @@ test("workspace library uses a signed wallet challenge to list owned lockers", a
   const proofsAfterList = await page.evaluate(() => (window as any).__walletCalls.filter((name: string) => name === "tari_signWalletOwnershipChallenge").length);
   expect(proofsAfterList).toBeGreaterThan(proofsBeforeList);
 });
+
+test("explains how to connect when no Tari provider is injected", async ({ page }) => {
+  await page.goto("/app/settings");
+  await page.getByRole("button", { name: "Connect wallet", exact: true }).click();
+  await expect(page.getByText(/no tari wallet provider was detected/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Tari Web Wallet" })).toHaveAttribute("href", "https://universe.tari.mw");
+  await expect(page.getByRole("link", { name: "Sapient browser wallet" })).toHaveAttribute("href", "https://sapient.tari.mw/");
+  await expect(page.getByRole("link", { name: "Connection guide" })).toHaveAttribute("href", "https://universe.tari.mw/integration/");
+});

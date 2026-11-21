@@ -188,7 +188,7 @@ function Library({ wallet }: { wallet: WalletSession | null }) {
     loadMyLockers(wallet).then(rows => { setError(""); setItems(rows); })
       .catch(e => setError(e instanceof Error ? e.message : "Could not load lockers."));
   }, [wallet?.address]);
-  return <div className="page-content"><div className="page-title-row"><div><div className="eyebrow">YOUR CONTENT</div><h1>My lockers</h1><p>Locker links created by your connected Tari wallet.</p></div><Button to="/app/create"><FilePlus2 size={16}/> New locker</Button></div>
+  return <div className="page-content"><div className="page-title-row"><div><div className="eyebrow">YOUR CONTENT</div><h1>My lockers</h1><p>Locker links created by your connected Tari wallet.</p></div><Button to="/app/create"><FilePlus2 size={16}/> New locker</Button><p className="wallet-help-links"><a href="https://universe.tari.mw" target="_blank" rel="noreferrer">Open Tari Web Wallet</a><span> · </span><a href="https://sapient.tari.mw/" target="_blank" rel="noreferrer">Sapient browser wallet</a><span> · </span><a href="https://universe.tari.mw/integration/" target="_blank" rel="noreferrer">Connection guide</a></p></div>
     {!wallet && <div className="wallet-prompt"><b>Connect your Tari wallet to see your lockers.</b></div>}
     {error && <p className="form-error">{error}</p>}
     {items.length ? <div className="locker-list">{items.map(item=><LockerRow key={item.id} locker={item}/>)}</div> : wallet ? <EmptyState/> : null}

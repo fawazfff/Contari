@@ -11,6 +11,7 @@ export type Locker = {
   creator: string;
   creatorNetwork?: string;
   keyVersion?: number;
+  ootleComponentAddress?: string;
   gate: "wallet" | "allowlist";
   allowedWallets: string[];
   claims: Array<{ address: string; at: string; proof: string }>;
@@ -27,6 +28,7 @@ type LockerRow = {
   creator_wallet: string;
   creator_network?: string;
   key_version?: number;
+  ootle_component_address?: string | null;
   created_at: string;
 };
 
@@ -57,6 +59,7 @@ function toLocker(row: LockerRow, claims: Locker["claims"] = []): Locker {
     creator: row.creator_wallet,
     creatorNetwork: row.creator_network,
     keyVersion: row.key_version ?? 1,
+    ootleComponentAddress: row.ootle_component_address || undefined,
     gate: row.gate,
     allowedWallets: row.allowed_wallets || [],
     claims,
@@ -88,7 +91,7 @@ export function getLocker(id: string) {
 export async function loadLocker(id: string): Promise<Locker | undefined> {
   const { data, error } = await supabase
     .from("contari_lockers")
-    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,creator_network,key_version,created_at")
+    .select("id,title,description,ciphertext,iv,gate,allowed_wallets,creator_wallet,creator_network,key_version,ootle_component_address,created_at")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -125,7 +128,7 @@ async function edgeFunctionError(error: unknown, fallback: string) {
   return candidate?.message || fallback;
 }
 
-export async function createSecureLocker(locker: Locker, key: string, session: WalletSession) {
+export async function createSecureLocker(locker: Locker, key: string, session: WalletSession, componentAddress?: string) {
   const challenge = await requestWalletChallenge(locker.id, "create", session);
   const proof = await signTariChallenge(session, challenge.challenge);
   const { data, error } = await supabase.functions.invoke("contari-secure", {
@@ -134,11 +137,11 @@ export async function createSecureLocker(locker: Locker, key: string, session: W
       network: session.network, signature: proof.signature, publicNonce: proof.publicNonce,
       id: locker.id, title: locker.title, description: locker.description,
       ciphertext: locker.ciphertext, iv: locker.iv, gate: locker.gate,
-      allowedWallets: locker.allowedWallets, key,
+      allowedWallets: locker.allowedWallets, key, componentAddress: componentAddress || null,
     },
   });
   if (error) throw new Error(data?.error || await edgeFunctionError(error, "Secure locker creation failed."));
-  saveLocker({ ...locker, creatorNetwork: session.network, keyVersion: 2 });
+  saveLocker({ ...locker, creatorNetwork: session.network, keyVersion: 2, ootleComponentAddress: componentAddress || undefined });
 }
 async function requestWalletChallenge(lockerId: string, purpose: "create" | "unlock", session: WalletSession) {
   const { data, error } = await supabase.functions.invoke("contari-secure", {
@@ -154,7 +157,7 @@ export async function unlockSecureLocker(lockerId: string, session: import("./ta
   const { data, error } = await supabase.functions.invoke("contari-secure", {
     body: {
       action: "unlock", challengeId: challenge.id, lockerId,
-      walletAddress: session.address, network: session.network,
+      walletAddress: session.address, network: session.network, transactionId: transactionId || null,
       signature: proof.signature, publicNonce: proof.publicNonce,
     },
   });

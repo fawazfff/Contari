@@ -104,6 +104,7 @@ mod contari {
             emit_event("LockerClaimed", [
                 ("locker_id_hash", locker_id_hash),
                 ("claimant_key", signer.to_string()),
+                ("component_address", CallerContext::current_component_address().to_string()),
             ]);
         }
 

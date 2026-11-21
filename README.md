@@ -70,3 +70,18 @@ The contract uses the authenticated Ootle transaction signer, not a caller-suppl
 6. Add server-side Ootle indexer verification of the committed `LockerClaimed` event before releasing a key when contract mode is enabled.
 7. Consider recipient-specific public-key wrapping if the product needs an operator-blind, end-to-end encryption model.
 8. Test the complete flow on mobile and desktop before public launch.
+
+
+## Ootle key-release verification configuration
+
+Contract-gated lockers fail closed unless the secure Edge Function can verify the claim through two independent Tari indexers and bind the event to the expected Contari template and component.
+
+Set these Supabase Edge Function secrets after publishing the template and creating a component:
+
+- `CONTARI_OOTLE_ESMERALDA_TEMPLATE_ADDRESS`: the published Contari template address used on Esmeralda.
+- `CONTARI_OOTLE_MAINNET_TEMPLATE_ADDRESS`: the published Contari template address used on mainnet.
+- `CONTARI_OOTLE_MAINNET_INDEXERS`: two comma-separated HTTPS mainnet indexer base URLs.
+
+Esmeralda indexers use Tari's documented public endpoints by default. Mainnet endpoints are not guessed or hardcoded. Until the relevant template address and two indexer URLs are configured, Ootle-gated key release stays locked. Mainnet locker creation also requires a registry component address.
+
+The Edge Function queries `GET /transactions/{transaction_id}/result` and `GET /transactions/events`. It requires a committed result and a matching `ContariRegistry.LockerClaimed` event on both indexers. The event must contain the expected locker hash, signer key and emitting component address, and its template address must match the configured deployed template.

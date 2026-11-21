@@ -60,3 +60,12 @@
 }
 
 .settings-saved { margin:10px 0 0; color:#356b45; font-size:12px; }
+
+
+/* Mobile ergonomics and touch targets. */
+@media (max-width: 760px) {
+  .mobile-menu,.sidebar-close { min-width:44px; min-height:44px; display:grid; place-items:center; }
+  .site-header .header-actions>.button { min-height:44px; font-size:12px; }
+  .side-nav a,.help-link { min-height:44px; }
+  .form-card input,.form-card textarea,.settings-card input { font-size:16px; }
+}

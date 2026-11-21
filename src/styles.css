@@ -16,3 +16,45 @@
 .auth-compact .auth-success,.auth-compact .auth-error{position:absolute;top:48px;right:100px;background:#fff;padding:7px;border:1px solid #e5eae2;border-radius:6px;z-index:30}
 .auth-compact .auth-status{max-width:190px;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:760px){.workspace-top{gap:5px}.auth-compact .auth-form-row input{width:105px}.auth-panel{gap:4px}.auth-panel>button,.auth-form-row button{padding:7px 8px}.auth-compact .auth-status{max-width:105px;font-size:8px}.public-top-actions{gap:4px}.public-top-actions .button{padding:0 8px}.auth-compact .auth-success,.auth-compact .auth-error{right:10px;top:58px}}
+
+
+/* Subtle interface motion: quick, quiet, and disabled for reduced-motion users. */
+@keyframes contari-enter {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes contari-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-7px) rotate(.4deg); }
+}
+@keyframes contari-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.hero-copy { animation: contari-enter .65s cubic-bezier(.2,.8,.2,1) both; }
+.hero-art { animation: contari-enter .8s .1s cubic-bezier(.2,.8,.2,1) both; }
+.content-sheet { animation: contari-float 7s 1s ease-in-out infinite; }
+.proof-float { animation: contari-enter .55s .55s ease-out both, contari-float 6s 1.2s ease-in-out infinite; }
+.chain-float { animation: contari-enter .55s .7s ease-out both, contari-float 7s 1.5s ease-in-out infinite; }
+.orbit-one { animation: contari-orbit 70s linear infinite; }
+.orbit-two { animation: contari-orbit 95s linear infinite reverse; }
+.feature-grid article { transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease; }
+.feature-grid article:hover { transform: translateY(-4px); border-color: #cbd8c8; box-shadow: 0 16px 36px rgba(28,47,34,.07); }
+.gate-option { transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+.gate-option:hover { transform: translateY(-2px); }
+.locker-row { transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.locker-row:hover { box-shadow: 0 8px 22px rgba(28,47,34,.06); }
+.wallet-error { position: absolute; right: 34px; top: 58px; z-index: 25; max-width: 360px; padding: 9px 12px; border: 1px solid #f0d4ce; border-radius: 8px; background: #fff7f5; color: #a84c37; font-size: 11px; box-shadow: 0 8px 24px rgba(45,30,25,.08); }
+.wallet-prompt { display:flex; align-items:center; justify-content:space-between; gap:18px; margin:0 0 20px; padding:17px 18px; background:#fff; border:1px solid #e5eae2; border-radius:11px; }
+.wallet-prompt b { font-size:12px; }
+.wallet-prompt p { margin:5px 0 0; color:#849084; font-size:11px; }
+.settings-warning { line-height:1.7; }
+@media (max-width:760px) {
+  .wallet-error { top:54px; left:12px; right:12px; max-width:none; }
+  .wallet-prompt { align-items:flex-start; flex-direction:column; }
+  .wallet-prompt .button { width:100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-copy,.hero-art,.content-sheet,.proof-float,.chain-float,.orbit-one,.orbit-two { animation:none !important; }
+  .feature-grid article,.gate-option,.locker-row { transition:none !important; }
+}

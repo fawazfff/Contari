@@ -30,6 +30,8 @@ async function mockSecureFunction(page: Page) {
     const body = route.request().postDataJSON() as Record<string, any>;
     if (body.action === "challenge") {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: "challenge-" + body.purpose, challenge: "contari:" + body.purpose + ":" + body.lockerId + ":test", expires_at: new Date(Date.now() + 300000).toISOString() }) });
+    } else if (body.action === "preflight") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ready: true }) });
     } else if (body.action === "read") {
       const row = lockerRow && lockerRow.id === body.lockerId ? { ...lockerRow, allowed_wallets: undefined } : null;
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ locker: row }) });
